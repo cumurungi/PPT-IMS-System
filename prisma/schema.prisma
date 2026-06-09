@@ -1,0 +1,765 @@
+// Prisma schema for the Integrated Management System (IMS)
+// Full schema with all enums and models
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  MANAGER
+  EMPLOYEE
+}
+
+enum Department {
+  MEDIA
+  EVANGELISM
+  IT
+  HR_FINANCE
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  COMPLETED
+  BLOCKED
+}
+
+enum RecordingStatus {
+  CAPTURED
+  IN_EDITING
+  EDITED
+  APPROVED
+  PUBLISHED
+}
+
+enum EventStatus {
+  PLANNED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketCategory {
+  HARDWARE
+  SOFTWARE
+  NETWORK
+  ACCESS
+  OTHER
+}
+
+enum LeaveType {
+  VACATION
+  SICK_LEAVE
+  PERSONAL_LEAVE
+  OTHER
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ExpenseCategory {
+  TRAVEL
+  MEALS
+  EQUIPMENT
+  SUPPLIES
+  OTHER
+}
+
+enum ExpenseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
+  INFO_REQUESTED
+}
+
+enum PlatformType {
+  VIDEO
+  AUDIO
+  WEBSITE
+  SOCIAL_MEDIA
+  OTHER
+}
+
+enum MediaRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+enum ReportStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REVISION_REQUESTED
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_DEADLINE
+  TASK_MENTION
+  TASK_STATUS
+  APPROVAL_REQUIRED
+  APPROVAL_RESULT
+  REPORT_DUE
+  REPORT_SUBMITTED
+  WORKFLOW_ALERT
+  SYSTEM
+}
+
+enum NotificationDelivery {
+  IN_APP
+  EMAIL
+  BOTH
+}
+
+enum AuditAction {
+  LOGIN_SUCCESS
+  LOGIN_FAIL
+  LOGOUT
+  CREATE
+  UPDATE
+  DELETE
+  APPROVE
+  REJECT
+  PERMISSION_CHANGE
+}
+
+// ─── Core User & Auth ──────────────────────────────────────────────────────────
+
+model User {
+  id                   String     @id @default(cuid())
+  name                 String
+  email                String     @unique
+  passwordHash         String
+  role                 Role
+  department           Department?
+  isActive             Boolean    @default(true)
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+
+  // Relations
+  assignedTasks        Task[]               @relation("TaskAssignee")
+  createdTasks         Task[]               @relation("TaskCreator")
+  taskComments         TaskComment[]
+  taskAttachments      TaskAttachment[]
+  projects             Project[]            @relation("ProjectCreator")
+  recordings           Recording[]          @relation("RecordingCreator")
+  editingTasks         Recording[]          @relation("RecordingEditor")
+  approvals            ContentApproval[]
+  mediaRequests        MediaRequest[]       @relation("MediaRequestCreator")
+  events               Event[]              @relation("EventCreator")
+  publishQueueActions  PublishingQueue[]    @relation("QueuePublisher")
+  tickets              SupportTicket[]      @relation("TicketCreator")
+  ticketAssignee       SupportTicket[]      @relation("TicketAssignee")
+  ticketComments       TicketComment[]
+  attendanceRecords    AttendanceRecord[]
+  leaveRequests        LeaveRequest[]
+  expenseRequests      ExpenseRequest[]
+  weeklyReports        WeeklyReport[]
+  reportReviews        WeeklyReport[]       @relation("ReportReviewer")
+  performanceNotes     PerformanceNote[]    @relation("NoteAuthor")
+  performanceSubject   PerformanceNote[]    @relation("NoteSubject")
+  notifications        Notification[]
+  notificationPrefs    NotificationPreference?
+  auditLogs            AuditLog[]
+  savedFilters         SavedFilter[]
+  storageQuotas        StorageQuota[]       @relation("QuotaSetBy")
+  employeeProfile      EmployeeProfile?
+
+  @@index([email])
+  @@index([role])
+  @@index([department])
+}
+
+// ─── Employee Profile (HR) ────────────────────────────────────────────────────
+
+model EmployeeProfile {
+  id                   String    @id @default(cuid())
+  userId               String    @unique
+  user                 User      @relation(fields: [userId], references: [id])
+  dateOfBirth          DateTime?
+  phone                String?
+  address              String?
+  emergencyContact     String?
+  emergencyPhone       String?
+  position             String
+  hireDate             DateTime
+  isActive             Boolean   @default(true)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  employmentHistory    EmploymentHistory[]
+  documents            EmployeeDocument[]
+}
+
+model EmploymentHistory {
+  id                   String          @id @default(cuid())
+  profileId            String
+  profile              EmployeeProfile @relation(fields: [profileId], references: [id])
+  position             String
+  department           Department
+  startDate            DateTime
+  endDate              DateTime?
+  notes                String?
+  createdAt            DateTime        @default(now())
+}
+
+model EmployeeDocument {
+  id                   String          @id @default(cuid())
+  profileId            String
+  profile              EmployeeProfile @relation(fields: [profileId], references: [id])
+  name                 String
+  fileUrl              String
+  fileSizeBytes        Int
+  uploadedAt           DateTime        @default(now())
+}
+
+// ─── Projects & Tasks ─────────────────────────────────────────────────────────
+
+model Project {
+  id                   String     @id @default(cuid())
+  name                 String
+  description          String
+  department           Department
+  deadline             DateTime
+  isActive             Boolean    @default(true)
+  createdById          String
+  createdBy            User       @relation("ProjectCreator", fields: [createdById], references: [id])
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+
+  tasks                Task[]
+
+  @@index([department])
+  @@index([deadline])
+}
+
+model Task {
+  id                   String     @id @default(cuid())
+  title                String
+  description          String
+  status               TaskStatus @default(TODO)
+  deadline             DateTime
+  projectId            String
+  project              Project    @relation(fields: [projectId], references: [id])
+  assigneeId           String
+  assignee             User       @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdById          String
+  createdBy            User       @relation("TaskCreator", fields: [createdById], references: [id])
+  crossDepartment      Boolean    @default(false)
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+
+  comments             TaskComment[]
+  attachments          TaskAttachment[]
+
+  @@index([assigneeId])
+  @@index([status])
+  @@index([deadline])
+  @@index([projectId])
+}
+
+model TaskComment {
+  id                   String   @id @default(cuid())
+  taskId               String
+  task                 Task     @relation(fields: [taskId], references: [id])
+  authorId             String
+  author               User     @relation(fields: [authorId], references: [id])
+  body                 String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([taskId])
+}
+
+model TaskAttachment {
+  id                   String   @id @default(cuid())
+  taskId               String
+  task                 Task     @relation(fields: [taskId], references: [id])
+  uploadedById         String
+  uploadedBy           User     @relation(fields: [uploadedById], references: [id])
+  fileName             String
+  fileUrl              String
+  fileSizeBytes        Int
+  uploadedAt           DateTime @default(now())
+
+  @@index([taskId])
+}
+
+// ─── Media Department ─────────────────────────────────────────────────────────
+
+model Recording {
+  id                   String          @id @default(cuid())
+  title                String
+  eventId              String?
+  event                Event?          @relation(fields: [eventId], references: [id])
+  mediaRequestId       String?         @unique
+  mediaRequest         MediaRequest?   @relation(fields: [mediaRequestId], references: [id])
+  recordingDate        DateTime
+  durationSeconds      Int
+  format               String
+  status               RecordingStatus @default(CAPTURED)
+  editingProgress      Int             @default(0)  // 0-100
+  editorId             String?
+  editor               User?           @relation("RecordingEditor", fields: [editorId], references: [id])
+  createdById          String
+  createdBy            User            @relation("RecordingCreator", fields: [createdById], references: [id])
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  assets               MediaAsset[]
+  approvals            ContentApproval[]
+  publishingQueue      PublishingQueue?
+
+  @@index([status])
+  @@index([eventId])
+}
+
+model MediaAsset {
+  id                   String    @id @default(cuid())
+  title                String
+  fileUrl              String
+  fileType             String
+  fileSizeBytes        BigInt
+  category             String
+  tags                 String[]
+  thumbnailUrl         String?
+  recordingId          String?
+  recording            Recording? @relation(fields: [recordingId], references: [id])
+  uploadedById         String
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([category])
+  @@index([tags])
+  @@index([createdAt])
+}
+
+model ContentApproval {
+  id                   String    @id @default(cuid())
+  recordingId          String
+  recording            Recording @relation(fields: [recordingId], references: [id])
+  approverId           String
+  approver             User      @relation(fields: [approverId], references: [id])
+  decision             Boolean              // true=approved, false=rejected
+  notes                String?
+  rejectionReason      String?
+  createdAt            DateTime  @default(now())
+
+  @@index([recordingId])
+}
+
+model MediaRequest {
+  id                   String             @id @default(cuid())
+  eventId              String
+  event                Event              @relation(fields: [eventId], references: [id])
+  requestedById        String
+  requestedBy          User               @relation("MediaRequestCreator", fields: [requestedById], references: [id])
+  recordingType        String
+  requestedDate        DateTime
+  status               MediaRequestStatus @default(PENDING)
+  declineReason        String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  recording            Recording?
+
+  @@index([eventId])
+  @@index([status])
+}
+
+// ─── Publishing ───────────────────────────────────────────────────────────────
+
+model PublishingQueue {
+  id                   String    @id @default(cuid())
+  recordingId          String    @unique
+  recording            Recording @relation(fields: [recordingId], references: [id])
+  priority             Int       @default(50)   // 1=highest, 100=lowest
+  scheduledDate        DateTime?
+  publishedAt          DateTime?
+  publishedById        String?
+  publishedBy          User?     @relation("QueuePublisher", fields: [publishedById], references: [id])
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  platforms            PublishingQueuePlatform[]
+
+  @@index([priority])
+  @@index([scheduledDate])
+}
+
+model Platform {
+  id                   String       @id @default(cuid())
+  name                 String
+  type                 PlatformType
+  url                  String
+  apiCredentials       String?      // stored encrypted
+  isActive             Boolean      @default(true)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  publishingRecords    PublishingQueuePlatform[]
+
+  @@index([type])
+  @@index([isActive])
+}
+
+model PublishingQueuePlatform {
+  id                   String          @id @default(cuid())
+  queueId              String
+  queue                PublishingQueue @relation(fields: [queueId], references: [id])
+  platformId           String
+  platform             Platform        @relation(fields: [platformId], references: [id])
+  publishedAt          DateTime?
+
+  @@unique([queueId, platformId])
+}
+
+// ─── Evangelism Department ────────────────────────────────────────────────────
+
+model Event {
+  id                   String      @id @default(cuid())
+  title                String
+  date                 DateTime
+  location             String
+  eventType            String
+  status               EventStatus @default(PLANNED)
+  createdById          String
+  createdBy            User        @relation("EventCreator", fields: [createdById], references: [id])
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  preachers            EventPreacher[]
+  recordings           Recording[]
+  mediaRequests        MediaRequest[]
+  reports              EventReport[]
+
+  @@index([date])
+  @@index([status])
+}
+
+model Preacher {
+  id                   String    @id @default(cuid())
+  name                 String
+  email                String?
+  phone                String?
+  specialization       String
+  notes                String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  events               EventPreacher[]
+}
+
+model EventPreacher {
+  id                   String   @id @default(cuid())
+  eventId              String
+  event                Event    @relation(fields: [eventId], references: [id])
+  preacherId           String
+  preacher             Preacher @relation(fields: [preacherId], references: [id])
+  role                 String?
+
+  @@unique([eventId, preacherId])
+}
+
+model EventReport {
+  id                   String       @id @default(cuid())
+  eventId              String
+  event                Event        @relation(fields: [eventId], references: [id])
+  submittedById        String
+  attendanceCount      Int
+  activitiesSummary    String
+  outcomes             String
+  challenges           String
+  status               ReportStatus @default(DRAFT)
+  reviewNotes          String?
+  reviewedById         String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  attachments          EventReportAttachment[]
+
+  @@index([eventId])
+}
+
+model EventReportAttachment {
+  id                   String      @id @default(cuid())
+  reportId             String
+  report               EventReport @relation(fields: [reportId], references: [id])
+  fileName             String
+  fileUrl              String
+  fileSizeBytes        Int
+  uploadedAt           DateTime    @default(now())
+}
+
+// ─── IT Department ────────────────────────────────────────────────────────────
+
+model SupportTicket {
+  id                   String         @id @default(cuid())
+  title                String
+  description          String
+  priority             TicketPriority
+  category             TicketCategory
+  status               TicketStatus   @default(OPEN)
+  createdById          String
+  createdBy            User           @relation("TicketCreator", fields: [createdById], references: [id])
+  assigneeId           String?
+  assignee             User?          @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  resolvedAt           DateTime?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  comments             TicketComment[]
+  attachments          TicketAttachment[]
+
+  @@index([status])
+  @@index([priority])
+  @@index([assigneeId])
+}
+
+model TicketComment {
+  id                   String        @id @default(cuid())
+  ticketId             String
+  ticket               SupportTicket @relation(fields: [ticketId], references: [id])
+  authorId             String
+  author               User          @relation(fields: [authorId], references: [id])
+  body                 String
+  createdAt            DateTime      @default(now())
+}
+
+model TicketAttachment {
+  id                   String        @id @default(cuid())
+  ticketId             String
+  ticket               SupportTicket @relation(fields: [ticketId], references: [id])
+  fileName             String
+  fileUrl              String
+  fileSizeBytes        Int
+  uploadedAt           DateTime      @default(now())
+}
+
+model StorageQuota {
+  id                   String     @id @default(cuid())
+  department           Department @unique
+  quotaBytes           BigInt
+  usedBytes            BigInt     @default(0)
+  fileCount            Int        @default(0)
+  setById              String
+  setBy                User       @relation("QuotaSetBy", fields: [setById], references: [id])
+  updatedAt            DateTime   @updatedAt
+}
+
+model StorageUsageSnapshot {
+  id                   String     @id @default(cuid())
+  department           Department
+  usedBytes            BigInt
+  fileCount            Int
+  snapshotDate         DateTime
+
+  @@index([department, snapshotDate])
+}
+
+// ─── HR / Finance Department ──────────────────────────────────────────────────
+
+model AttendanceRecord {
+  id                   String    @id @default(cuid())
+  userId               String
+  user                 User      @relation(fields: [userId], references: [id])
+  date                 DateTime  @db.Date
+  checkIn              DateTime?
+  checkOut             DateTime?
+  totalHours           Float?
+  justificationNote    String?
+  manuallyEdited       Boolean   @default(false)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+}
+
+model LeaveRequest {
+  id                   String      @id @default(cuid())
+  userId               String
+  user                 User        @relation(fields: [userId], references: [id])
+  leaveType            LeaveType
+  startDate            DateTime    @db.Date
+  endDate              DateTime    @db.Date
+  reason               String
+  status               LeaveStatus @default(PENDING)
+  reviewedById         String?
+  reviewerComment      String?
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([startDate, endDate])
+}
+
+model ExpenseRequest {
+  id                   String          @id @default(cuid())
+  userId               String
+  user                 User            @relation(fields: [userId], references: [id])
+  description          String
+  amount               Decimal         @db.Decimal(12, 2)
+  category             ExpenseCategory
+  expenseDate          DateTime        @db.Date
+  receiptUrl           String
+  status               ExpenseStatus   @default(PENDING)
+  reviewedById         String?
+  reviewerComment      String?
+  paidAt               DateTime?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([category])
+}
+
+// ─── Reporting ────────────────────────────────────────────────────────────────
+
+model WeeklyReport {
+  id                   String       @id @default(cuid())
+  userId               String
+  user                 User         @relation(fields: [userId], references: [id])
+  weekStartDate        DateTime     @db.Date
+  workCompleted        String
+  challengesFaced      String
+  nextWeekPlans        String
+  status               ReportStatus @default(DRAFT)
+  reviewedById         String?
+  reviewer             User?        @relation("ReportReviewer", fields: [reviewedById], references: [id])
+  reviewComments       String?
+  submittedAt          DateTime?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  attachments          WeeklyReportAttachment[]
+
+  @@unique([userId, weekStartDate])
+  @@index([userId])
+  @@index([status])
+  @@index([weekStartDate])
+}
+
+model WeeklyReportAttachment {
+  id                   String       @id @default(cuid())
+  reportId             String
+  report               WeeklyReport @relation(fields: [reportId], references: [id])
+  fileName             String
+  fileUrl              String
+  fileSizeBytes        Int
+  uploadedAt           DateTime     @default(now())
+}
+
+model PerformanceNote {
+  id                   String   @id @default(cuid())
+  subjectId            String
+  subject              User     @relation("NoteSubject", fields: [subjectId], references: [id])
+  authorId             String
+  author               User     @relation("NoteAuthor", fields: [authorId], references: [id])
+  note                 String
+  createdAt            DateTime @default(now())
+
+  @@index([subjectId])
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+model Notification {
+  id                   String           @id @default(cuid())
+  userId               String
+  user                 User             @relation(fields: [userId], references: [id])
+  type                 NotificationType
+  title                String
+  body                 String
+  entityType           String?          // e.g., "Task", "Recording"
+  entityId             String?
+  isRead               Boolean          @default(false)
+  isMandatory          Boolean          @default(false)
+  createdAt            DateTime         @default(now())
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+}
+
+model NotificationPreference {
+  id                   String               @id @default(cuid())
+  userId               String               @unique
+  user                 User                 @relation(fields: [userId], references: [id])
+  taskAssigned         Boolean              @default(true)
+  taskDeadline         Boolean              @default(true)
+  taskMention          Boolean              @default(true)
+  approvalRequired     Boolean              @default(true)
+  approvalResult       Boolean              @default(true)
+  reportDue            Boolean              @default(true)
+  workflowAlerts       Boolean              @default(true)
+  deliveryMethod       NotificationDelivery @default(IN_APP)
+  quietHoursStart      String?              // "HH:MM" format
+  quietHoursEnd        String?
+  updatedAt            DateTime             @updatedAt
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id                   String      @id @default(cuid())
+  userId               String
+  user                 User        @relation(fields: [userId], references: [id])
+  action               AuditAction
+  entityType           String
+  entityId             String?
+  details              Json?
+  ipAddress            String?
+  createdAt            DateTime    @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// ─── Saved Filters ────────────────────────────────────────────────────────────
+
+model SavedFilter {
+  id                   String   @id @default(cuid())
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id])
+  name                 String
+  filterContext        String   // e.g., "tasks", "reports"
+  filterParams         Json
+  createdAt            DateTime @default(now())
+
+  @@index([userId, filterContext])
+}
