@@ -6,18 +6,26 @@
 
 ## Overview
 
-The Integrated Management System (IMS) is a multi-tenant, multi-department web application built on Next.js with the App Router. It consolidates organizational operations — task management, media workflows, event management, HR processes, IT support, and reporting — into a single platform. Users interact through a responsive browser-based interface; all business logic and data access occurs server-side via Next.js API Routes and Prisma ORM against a PostgreSQL database.
+The Integrated Management System (IMS) is a multi-tenant, multi-department web application built as two separate projects: a **Vue.js** single-page frontend and a **Node.js / Express** REST API backend. It consolidates organizational operations — task management, media workflows, event management, HR processes, IT support, and reporting — into a single platform. Users interact through a responsive Vue.js interface; all business logic and data access occurs in the Express API layer via Prisma ORM against a MySQL database.
 
 The system serves four organizational departments (Media, Evangelism, IT, HR/Finance), three user roles (Admin, Manager, Employee), and supports cross-department automated workflows (Event → Media Request → Recording → Editing → Publishing Queue → Published).
 
+### Project Structure
+
+| Project | Technology | Description |
+|---------|-----------|-------------|
+| `ims-backend` | Node.js + Express + Prisma + MySQL | REST API, auth, business logic |
+| `ims-frontend` | Vue.js 3 + Vite + Pinia + Tailwind CSS | SPA user interface |
+
 ### Key Design Decisions
 
-- **Next.js App Router** for file-based routing, server components, and built-in API routes — avoids a separate backend service.
-- **next-auth v4** for session management and credential-based authentication — integrates seamlessly with Next.js middleware.
-- **Prisma ORM** with PostgreSQL — type-safe queries, automatic migrations, and a rich relational model.
-- **Server-Sent Events (SSE)** for real-time notifications — lighter than full WebSockets and compatible with Next.js serverless hosting without needing a separate socket server.
-- **Cloud object storage** (e.g., AWS S3 or compatible) for binary assets — keeps the PostgreSQL database lean, stores only metadata.
-- **Role + Department guard middleware** applied at the route level — single enforcement point for all access rules.
+- **Vue.js 3 (Composition API)** with Vite for the frontend SPA — fast builds, reactive UI, component-based architecture.
+- **Express.js** for the REST API backend — lightweight, flexible, wide ecosystem support.
+- **JWT (jsonwebtoken)** for stateless authentication — tokens stored in httpOnly cookies, refreshed automatically.
+- **Prisma ORM** with MySQL — type-safe queries, automatic migrations, and a rich relational model.
+- **Server-Sent Events (SSE)** for real-time notifications — lightweight push mechanism over HTTP.
+- **Cloud object storage** (e.g., AWS S3 or compatible) for binary assets — keeps the MySQL database lean, stores only metadata.
+- **Express middleware** for RBAC — single enforcement point for all access rules per route.
 
 ---
 
@@ -26,38 +34,36 @@ The system serves four organizational departments (Media, Evangelism, IT, HR/Fin
 ### High-Level Architecture
 
 ```
-┌────────────────────────────────────────────────────────────────────┐
-│                        Client (Browser)                            │
-│  Next.js App Router Pages  ←→  React Components (Tailwind CSS)    │
-│  next-auth Session          ←→  SSE EventSource (notifications)   │
-└──────────────────────────────────┬─────────────────────────────────┘
-                                   │ HTTPS
-┌──────────────────────────────────▼─────────────────────────────────┐
-│                   Next.js Application Server                       │
-│                                                                    │
-│  ┌──────────────┐  ┌───────────────┐  ┌────────────────────────┐  │
-│  │  App Router  │  │  API Routes   │  │   Middleware (Auth +    │  │
-│  │  (RSC/Pages) │  │ /api/**       │  │   RBAC guard)          │  │
-│  └──────────────┘  └───────┬───────┘  └────────────────────────┘  │
-│                             │                                       │
-│  ┌──────────────────────────▼───────────────────────────────────┐  │
-│  │               Service Layer (business logic)                  │  │
-│  │  AuthService │ UserService │ TaskService │ WorkflowService   │  │
-│  │  MediaService │ EventService │ HRService │ NotificationSvc   │  │
-│  └──────────────────────────┬───────────────────────────────────┘  │
-│                             │                                       │
-│  ┌──────────────────────────▼───────────────────────────────────┐  │
-│  │                      Prisma ORM                               │  │
-│  └──────────────────────────┬───────────────────────────────────┘  │
-└───────────────────────────────────────────────────────────────────-┘
-                              │
-             ┌────────────────┴─────────────────┐
-             │                                  │
-   ┌─────────▼─────────┐            ┌──────────▼──────────┐
-   │   PostgreSQL DB   │            │  Cloud Object Store  │
-   │  (all relational  │            │  (S3-compatible)     │
-   │   data + meta)    │            │  media, docs, files  │
-   └───────────────────┘            └─────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                  ims-frontend  (Vue.js 3 SPA)                   │
+│  Vue Router  ←→  Pinia Store  ←→  Axios HTTP Client            │
+│  Tailwind CSS    Components         SSE EventSource             │
+└────────────────────────────┬────────────────────────────────────┘
+                             │ HTTPS  (REST + SSE)
+┌────────────────────────────▼────────────────────────────────────┐
+│                  ims-backend  (Node.js / Express)               │
+│                                                                 │
+│  ┌─────────────┐  ┌──────────────┐  ┌─────────────────────┐   │
+│  │   Routers   │  │  Middleware  │  │   SSE Connections   │   │
+│  │ /api/v1/... │  │  JWT + RBAC  │  │  (per-user map)     │   │
+│  └──────┬──────┘  └──────────────┘  └─────────────────────┘   │
+│         │                                                       │
+│  ┌──────▼──────────────────────────────────────────────────┐   │
+│  │            Service Layer  (business logic)               │   │
+│  │  AuthService │ UserService │ TaskService │ MediaService  │   │
+│  │  EventService │ HRService │ NotificationService          │   │
+│  └──────┬──────────────────────────────────────────────────┘   │
+│         │                                                       │
+│  ┌──────▼──────────────────────────────────────────────────┐   │
+│  │                    Prisma ORM                            │   │
+│  └──────┬──────────────────────────────────────────────────┘   │
+└─────────┼───────────────────────────────────────────────────────┘
+          │
+  ┌───────┴──────────┐       ┌─────────────────────┐
+  │    MySQL DB      │       │  Cloud Object Store  │
+  │ (all relational  │       │  (S3-compatible)     │
+  │  data + meta)   │       │  media, docs, files  │
+  └──────────────────┘       └─────────────────────┘
 ```
 
 ### Request Flow

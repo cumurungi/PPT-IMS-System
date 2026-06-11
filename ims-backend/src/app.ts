@@ -1,0 +1,50 @@
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import cookieParser from 'cookie-parser';
+import rateLimit from 'express-rate-limit';
+import path from 'path';
+import apiRoutes from './routes/index';
+import { errorHandler } from './middleware/errorHandler';
+
+const app = express();
+
+// Security
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:5175',
+    process.env.CLIENT_URL || 'http://localhost:5173',
+  ],
+  credentials: true,
+}));
+
+// Rate limiting
+app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 500 }));
+
+// Parsing
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+
+// Logging
+if (process.env.NODE_ENV !== 'test') {
+  app.use(morgan('dev'));
+}
+
+// Health check
+app.get('/health', (_req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+
+// Static uploads
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
+// API routes
+app.use('/api/v1', apiRoutes);
+
+// Error handler (must be last)
+app.use(errorHandler);
+
+export default app;

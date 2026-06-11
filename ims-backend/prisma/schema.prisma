@@ -2,8 +2,7 @@
 // Full schema with all enums and models
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -259,9 +258,25 @@ model Project {
   updatedAt            DateTime   @updatedAt
 
   tasks                Task[]
+  files                ProjectFile[]
 
   @@index([department])
   @@index([deadline])
+}
+
+model ProjectFile {
+  id                   String   @id @default(cuid())
+  projectId            String
+  project              Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fileName             String
+  filePath             String   // relative path within folder (e.g., "designs/logo.png")
+  fileUrl              String   // stored file URL or local path
+  fileSizeBytes        Int
+  mimeType             String?
+  uploadedById         String
+  createdAt            DateTime @default(now())
+
+  @@index([projectId])
 }
 
 model Task {
@@ -361,7 +376,6 @@ model MediaAsset {
   updatedAt            DateTime  @updatedAt
 
   @@index([category])
-  @@index([tags])
   @@index([createdAt])
 }
 

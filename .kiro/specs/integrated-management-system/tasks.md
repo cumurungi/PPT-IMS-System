@@ -8,8 +8,8 @@ Implement the IMS as a Next.js 14 App Router application with Prisma ORM (Postgr
 
 ## Tasks
 
-- [-] 1. Scaffold project, tooling, and shared configuration
-  - [-] 1.1 Initialize Next.js 14 App Router project with TypeScript and Tailwind CSS
+- [ ] 1. Scaffold project, tooling, and shared configuration
+  - [ ] 1.1 Initialize Next.js 14 App Router project with TypeScript and Tailwind CSS
     - Run `npx create-next-app@latest` with `--typescript --tailwind --app --eslint` flags
     - Configure `tsconfig.json` with strict mode and path aliases (`@/` → `src/`)
     - Install and configure Prettier with Tailwind plugin
@@ -17,14 +17,14 @@ Implement the IMS as a Next.js 14 App Router application with Prisma ORM (Postgr
     - Configure `jest.config.ts` for ts-jest with module path aliases
     - _Requirements: Non-Functional — Maintainability_
 
-  - [-] 1.2 Configure Prisma with PostgreSQL and complete the database schema
+  - [ ] 1.2 Configure Prisma with PostgreSQL and complete the database schema
     - Replace the stub `prisma/schema.prisma` with the full schema from the design document (all enums + 30+ models)
     - Add `DATABASE_URL` to `.env` and `.env.example`
     - Run `npx prisma generate` and `npx prisma migrate dev --name init` to create the initial migration
     - Add `@prisma/client` singleton helper at `src/lib/prisma.ts`
     - _Requirements: 4, 5, 6, 8, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 25, 29, 30, 33_
 
-  - [-] 1.3 Set up environment variable schema and global type declarations
+  - [ ] 1.3 Set up environment variable schema and global type declarations
     - Create `src/lib/env.ts` — validates required env vars using Zod at startup (DATABASE_URL, NEXTAUTH_SECRET, S3_BUCKET, etc.)
     - Add `src/types/next-auth.d.ts` augmenting the Session/JWT types to include `role` and `department`
     - _Requirements: 1, 2_
