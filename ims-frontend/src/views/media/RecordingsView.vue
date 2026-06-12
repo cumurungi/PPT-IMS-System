@@ -93,7 +93,9 @@
 
           <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
             <span>{{ rec.format }}</span>
+            <span v-if="rec.recordingAssignee">🎙️ {{ rec.recordingAssignee.name }}</span>
             <span v-if="rec.editor">✏️ {{ rec.editor.name }}</span>
+            <span v-if="rec.editedVideoUrl">📹 Approval link ready</span>
             <span>{{ formatDate(rec.recordingDate) }}</span>
           </div>
         </div>

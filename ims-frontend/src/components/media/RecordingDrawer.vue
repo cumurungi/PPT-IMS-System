@@ -20,6 +20,8 @@
             {{ rec.format }} · {{ formatDuration(rec.durationSeconds) }} · {{ new Date(rec.recordingDate).toLocaleDateString() }}
           </p>
           <p v-if="rec.event" class="text-xs text-gray-500 dark:text-gray-400 mt-1">📅 {{ rec.event.title }}</p>
+          <p v-if="rec.recordingAssignee" class="text-xs text-gray-500 dark:text-gray-400 mt-1">🎙️ Recording assignee: {{ rec.recordingAssignee.name }}</p>
+          <p v-if="rec.editor" class="text-xs text-gray-500 dark:text-gray-400 mt-1">✏️ Editing assignee: {{ rec.editor.name }}</p>
         </div>
 
         <!-- Workflow progress -->
@@ -58,6 +60,33 @@
           <input type="range" min="0" max="100" step="5" v-model.number="localProgress"
             class="w-full accent-blue-600 mb-3" />
           <p v-if="rec.editor" class="text-xs text-gray-500 dark:text-gray-400 mb-3">Editor: {{ rec.editor.name }}</p>
+          <div v-if="rec.editedVideoUrl" class="mb-3">
+            <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">
+              Approval link{{ rec.approvalVideoSource ? ` (${rec.approvalVideoSource})` : '' }}
+            </p>
+            <a :href="rec.editedVideoUrl" target="_blank" rel="noopener noreferrer" class="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline">
+              Watch video for approval
+            </a>
+          </div>
+          <select
+            v-model="approvalVideoSource"
+            class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm mb-3 focus:ring-2 focus:ring-indigo-500 outline-none"
+          >
+            <option value="">Link source not decided yet</option>
+            <option value="YouTube">YouTube</option>
+            <option value="Synology">Synology</option>
+            <option value="Other">Other</option>
+          </select>
+          <input
+            v-model="editedVideoUrl"
+            type="url"
+            placeholder="Paste YouTube or Synology link"
+            class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm mb-3 focus:ring-2 focus:ring-indigo-500 outline-none"
+          />
+          <button @click="saveEditedVideoLink" :disabled="acting"
+            class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white py-2 rounded-lg text-sm font-medium mb-3">
+            {{ acting ? 'Saving...' : 'Save Approval Link' }}
+          </button>
           <button @click="updateProgress" :disabled="acting"
             class="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white py-2 rounded-lg text-sm font-medium">
             {{ localProgress === 100 ? 'Mark as Edited (100%)' : 'Save Progress' }}
@@ -69,6 +98,36 @@
           <p class="text-sm text-gray-700 dark:text-gray-300 mb-3">
             ⏳ This recording is awaiting approval.
           </p>
+          <div class="mb-4 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+            <p class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Approval video link (YouTube or Synology)</p>
+            <select
+              v-model="approvalVideoSource"
+              class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm mb-3 focus:ring-2 focus:ring-indigo-500 outline-none"
+            >
+              <option value="">Link source not decided yet</option>
+              <option value="YouTube">YouTube</option>
+              <option value="Synology">Synology</option>
+              <option value="Other">Other</option>
+            </select>
+            <input
+              v-model="editedVideoUrl"
+              type="url"
+              placeholder="Paste YouTube or Synology link"
+              class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm mb-3 focus:ring-2 focus:ring-indigo-500 outline-none"
+            />
+            <button @click="saveEditedVideoLink" :disabled="acting"
+              class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white py-2 rounded-lg text-sm font-medium">
+              {{ acting ? 'Saving...' : 'Save Approval Link' }}
+            </button>
+          </div>
+          <div v-if="rec.editedVideoUrl" class="mb-4 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+            <p class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Approval video link{{ rec.approvalVideoSource ? ` (${rec.approvalVideoSource})` : '' }}
+            </p>
+            <a :href="rec.editedVideoUrl" target="_blank" rel="noopener noreferrer" class="text-sm text-blue-600 dark:text-blue-400 hover:underline break-all">
+              {{ rec.editedVideoUrl }}
+            </a>
+          </div>
           <template v-if="auth.isManager">
             <textarea v-model="approvalNotes" rows="2" placeholder="Approval notes (optional)..."
               class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm mb-3 resize-none"></textarea>
@@ -144,6 +203,8 @@ const localProgress = ref(0);
 const approvalNotes = ref('');
 const rejectionReason = ref('');
 const showReject = ref(false);
+const editedVideoUrl = ref('');
+const approvalVideoSource = ref('');
 
 const workflowSteps = [
   { value: 'CAPTURED', label: 'Captured' },
@@ -160,6 +221,8 @@ async function fetchRecording() {
     const { data } = await api.get(`/media/recordings/${props.recordingId}`);
     rec.value = data;
     localProgress.value = data.editingProgress;
+    editedVideoUrl.value = data.editedVideoUrl || '';
+    approvalVideoSource.value = data.approvalVideoSource || '';
   } catch (err) {
     console.error('Failed to load recording:', err);
   } finally {
@@ -176,6 +239,19 @@ async function startEditing() {
   acting.value = true;
   try {
     await api.post(`/media/recordings/${props.recordingId}/start-editing`, {});
+    await fetchRecording();
+    emit('updated');
+  } catch (err) { console.error(err); }
+  finally { acting.value = false; }
+}
+
+async function saveEditedVideoLink() {
+  acting.value = true;
+  try {
+    await api.patch(`/media/recordings/${props.recordingId}`, {
+      editedVideoUrl: editedVideoUrl.value.trim() || null,
+      approvalVideoSource: approvalVideoSource.value || null,
+    });
     await fetchRecording();
     emit('updated');
   } catch (err) { console.error(err); }

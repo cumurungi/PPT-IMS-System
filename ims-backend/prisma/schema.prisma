@@ -41,6 +41,13 @@ enum RecordingStatus {
   PUBLISHED
 }
 
+enum EditingStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  ON_HOLD
+}
+
 enum EventStatus {
   PLANNED
   CONFIRMED
@@ -173,7 +180,11 @@ model User {
   taskAttachments      TaskAttachment[]
   projects             Project[]            @relation("ProjectCreator")
   recordings           Recording[]          @relation("RecordingCreator")
+  recordingAssignees   Recording[]          @relation("RecordingAssignee")
   editingTasks         Recording[]          @relation("RecordingEditor")
+  editingProjects      EditingProject[]     @relation("EditingProjectCreator")
+  editingAssignees     EditingTask[]        @relation("EditingTaskAssignee")
+  editingComments      EditingComment[]
   approvals            ContentApproval[]
   mediaRequests        MediaRequest[]       @relation("MediaRequestCreator")
   events               Event[]              @relation("EventCreator")
@@ -347,6 +358,10 @@ model Recording {
   editingProgress      Int             @default(0)  // 0-100
   editorId             String?
   editor               User?           @relation("RecordingEditor", fields: [editorId], references: [id])
+  recordingAssigneeId  String?
+  recordingAssignee    User?           @relation("RecordingAssignee", fields: [recordingAssigneeId], references: [id])
+  editedVideoUrl       String?
+  approvalVideoSource  String?
   createdById          String
   createdBy            User            @relation("RecordingCreator", fields: [createdById], references: [id])
   createdAt            DateTime        @default(now())
@@ -358,6 +373,10 @@ model Recording {
 
   @@index([status])
   @@index([eventId])
+  @@index([editorId])
+  @@index([recordingAssigneeId])
+  @@index([editedVideoUrl])
+  @@index([approvalVideoSource])
 }
 
 model MediaAsset {
@@ -367,7 +386,7 @@ model MediaAsset {
   fileType             String
   fileSizeBytes        BigInt
   category             String
-  tags                 String   @default("[]") @db.Text // JSON array stored as string
+  tags                 String?   @db.Text // JSON array stored as string
   thumbnailUrl         String?
   recordingId          String?
   recording            Recording? @relation(fields: [recordingId], references: [id])
@@ -410,6 +429,60 @@ model MediaRequest {
 
   @@index([eventId])
   @@index([status])
+}
+
+// ─── Media Editing Sub-Module ─────────────────────────────────────────────────
+
+model EditingProject {
+  id                   String     @id @default(cuid())
+  title                String
+  description          String?
+  status               EditingStatus @default(PENDING)
+  deadline             DateTime
+  createdById          String
+  createdBy            User       @relation("EditingProjectCreator", fields: [createdById], references: [id])
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+
+  tasks                EditingTask[]
+
+  @@index([status])
+  @@index([deadline])
+}
+
+model EditingTask {
+  id                   String     @id @default(cuid())
+  projectId            String
+  project              EditingProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title                String
+  description          String?
+  status               EditingStatus @default(PENDING)
+  assigneeId           String
+  assignee             User       @relation("EditingTaskAssignee", fields: [assigneeId], references: [id])
+  priority             String     @default("MEDIUM")  // LOW, MEDIUM, HIGH
+  deadline             DateTime?
+  fileUrl              String?
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+
+  comments             EditingComment[]
+
+  @@index([projectId])
+  @@index([assigneeId])
+  @@index([status])
+}
+
+model EditingComment {
+  id                   String   @id @default(cuid())
+  taskId               String
+  task                 EditingTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId             String
+  author               User     @relation(fields: [authorId], references: [id])
+  body                 String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([taskId])
 }
 
 // ─── Publishing ───────────────────────────────────────────────────────────────

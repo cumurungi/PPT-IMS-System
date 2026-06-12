@@ -5,7 +5,12 @@ import { authenticate } from '../middleware/auth';
 import { requireDepartment } from '../middleware/rbac';
 
 const router = Router();
-router.use(authenticate, requireDepartment('MEDIA'));
+router.use(authenticate);
+
+// Most media routes are restricted to MEDIA department + ADMIN
+// Assets routes (library) are accessible to all authenticated users so any
+// department can save/view uploaded media assets.
+const mediaOnly = requireDepartment('MEDIA');
 
 // Valid status transitions for the recording workflow
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
@@ -24,10 +29,12 @@ const createRecordingSchema = z.object({
   recordingDate: z.string(),
   durationSeconds: z.number().int().nonnegative(),
   format: z.string().min(1),
+  recordingAssigneeId: z.string().optional(),
+  editorId: z.string().optional(),
 });
 
 // GET /api/v1/media/recordings
-router.get('/recordings', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/recordings', mediaOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { status, search } = req.query;
     const where: any = {};
@@ -39,6 +46,7 @@ router.get('/recordings', async (req: Request, res: Response, next: NextFunction
       orderBy: { createdAt: 'desc' },
       include: {
         editor: { select: { id: true, name: true } },
+        recordingAssignee: { select: { id: true, name: true } },
         createdBy: { select: { id: true, name: true } },
         event: { select: { id: true, title: true } },
         _count: { select: { assets: true, approvals: true } },
@@ -49,7 +57,7 @@ router.get('/recordings', async (req: Request, res: Response, next: NextFunction
 });
 
 // GET /api/v1/media/recordings/stats
-router.get('/recordings/stats', async (_req: Request, res: Response, next: NextFunction) => {
+router.get('/recordings/stats', mediaOnly, async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const [total, captured, inEditing, edited, approved, published] = await Promise.all([
       prisma.recording.count(),
@@ -63,8 +71,25 @@ router.get('/recordings/stats', async (_req: Request, res: Response, next: NextF
   } catch (err) { next(err); }
 });
 
+router.get('/assignable-users', mediaOnly, async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const users = await prisma.user.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { department: 'MEDIA' },
+          { role: 'ADMIN' },
+        ],
+      },
+      select: { id: true, name: true, email: true, role: true, department: true },
+      orderBy: { name: 'asc' },
+    });
+    res.json(users);
+  } catch (err) { next(err); }
+});
+
 // POST /api/v1/media/recordings
-router.post('/recordings', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/recordings', mediaOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const data = createRecordingSchema.parse(req.body);
     const recording = await prisma.recording.create({
@@ -76,20 +101,27 @@ router.post('/recordings', async (req: Request, res: Response, next: NextFunctio
         format: data.format,
         status: 'CAPTURED',
         createdById: req.user!.id,
+        recordingAssigneeId: data.recordingAssigneeId || null,
+        editorId: data.editorId || null,
       },
-      include: { createdBy: { select: { id: true, name: true } } },
+      include: {
+        editor: { select: { id: true, name: true } },
+        recordingAssignee: { select: { id: true, name: true } },
+        createdBy: { select: { id: true, name: true } },
+      },
     });
     res.status(201).json(recording);
   } catch (err) { next(err); }
 });
 
 // GET /api/v1/media/recordings/:id
-router.get('/recordings/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/recordings/:id', mediaOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const recording = await prisma.recording.findUniqueOrThrow({
       where: { id: req.params.id },
       include: {
         editor: { select: { id: true, name: true } },
+        recordingAssignee: { select: { id: true, name: true } },
         createdBy: { select: { id: true, name: true } },
         event: { select: { id: true, title: true } },
         assets: true,
@@ -104,7 +136,7 @@ router.get('/recordings/:id', async (req: Request, res: Response, next: NextFunc
 });
 
 // PATCH /api/v1/media/recordings/:id — general update (editing progress, etc.)
-router.patch('/recordings/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.patch('/recordings/:id', mediaOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const current = await prisma.recording.findUniqueOrThrow({ where: { id: req.params.id } });
     const updates: any = {};
@@ -120,20 +152,26 @@ router.patch('/recordings/:id', async (req: Request, res: Response, next: NextFu
 
     // Assign editor / start editing
     if (req.body.editorId) updates.editorId = req.body.editorId;
+    if (req.body.recordingAssigneeId !== undefined) updates.recordingAssigneeId = req.body.recordingAssigneeId || null;
+    if (req.body.editedVideoUrl !== undefined) updates.editedVideoUrl = req.body.editedVideoUrl || null;
+    if (req.body.approvalVideoSource !== undefined) updates.approvalVideoSource = req.body.approvalVideoSource || null;
     if (req.body.title) updates.title = req.body.title;
     if (req.body.format) updates.format = req.body.format;
 
     const recording = await prisma.recording.update({
       where: { id: req.params.id },
       data: updates,
-      include: { editor: { select: { id: true, name: true } } },
+      include: {
+        editor: { select: { id: true, name: true } },
+        recordingAssignee: { select: { id: true, name: true } },
+      },
     });
     res.json(recording);
   } catch (err) { next(err); }
 });
 
 // POST /api/v1/media/recordings/:id/start-editing — assign editor + move to IN_EDITING
-router.post('/recordings/:id/start-editing', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/recordings/:id/start-editing', mediaOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const current = await prisma.recording.findUniqueOrThrow({ where: { id: req.params.id } });
     if (!ALLOWED_TRANSITIONS[current.status]?.includes('IN_EDITING')) {
@@ -147,7 +185,10 @@ router.post('/recordings/:id/start-editing', async (req: Request, res: Response,
         editorId: req.body.editorId || req.user!.id,
         editingProgress: 0,
       },
-      include: { editor: { select: { id: true, name: true } } },
+      include: {
+        editor: { select: { id: true, name: true } },
+        recordingAssignee: { select: { id: true, name: true } },
+      },
     });
     res.json(recording);
   } catch (err) { next(err); }
@@ -160,7 +201,7 @@ const approvalSchema = z.object({
   rejectionReason: z.string().optional(),
 });
 
-router.post('/recordings/:id/approve', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/recordings/:id/approve', mediaOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
     // Only managers/admins can approve
     if (req.user!.role === 'EMPLOYEE') {
@@ -273,7 +314,7 @@ router.delete('/assets/:id', async (req: Request, res: Response, next: NextFunct
 // ─── MEDIA REQUESTS ──────────────────────────────────────────────────────────
 
 // GET /api/v1/media/requests
-router.get('/requests', async (_req: Request, res: Response, next: NextFunction) => {
+router.get('/requests', mediaOnly, async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const requests = await prisma.mediaRequest.findMany({
       orderBy: { createdAt: 'desc' },
@@ -286,7 +327,8 @@ router.get('/requests', async (_req: Request, res: Response, next: NextFunction)
   } catch (err) { next(err); }
 });
 
-function safeParseTags(tags: string): string[] {
+function safeParseTags(tags: string | null): string[] {
+  if (!tags) return [];
   try { return JSON.parse(tags); } catch { return []; }
 }
 

@@ -46,6 +46,24 @@
             <option v-for="e in events" :key="e.id" :value="e.id">{{ e.title }}</option>
           </select>
         </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Recording Assignee</label>
+            <select v-model="form.recordingAssigneeId"
+              class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+              <option value="">Select user</option>
+              <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Editing Assignee</label>
+            <select v-model="form.editorId"
+              class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+              <option value="">Select user</option>
+              <option v-for="u in users" :key="u.id" :value="u.id">{{ u.name }}</option>
+            </select>
+          </div>
+        </div>
 
         <p v-if="error" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
 
@@ -70,16 +88,21 @@ import api from '@/api/axios';
 
 const emit = defineEmits(['close', 'created']);
 
-const form = ref({ title: '', recordingDate: '', format: '', eventId: '' });
+const form = ref({ title: '', recordingDate: '', format: '', eventId: '', recordingAssigneeId: '', editorId: '' });
 const durationMinutes = ref<number | null>(null);
 const events = ref<any[]>([]);
+const users = ref<any[]>([]);
 const error = ref('');
 const submitting = ref(false);
 
 onMounted(async () => {
   try {
-    const { data } = await api.get('/evangelism/events');
-    events.value = data;
+    const [eventsRes, usersRes] = await Promise.all([
+      api.get('/evangelism/events'),
+      api.get('/media/assignable-users'),
+    ]);
+    events.value = eventsRes.data;
+    users.value = usersRes.data;
   } catch {
     // Evangelism events may not be accessible; that's fine
   }
@@ -95,6 +118,8 @@ async function handleCreate() {
       format: form.value.format,
       durationSeconds: (durationMinutes.value || 0) * 60,
       eventId: form.value.eventId || undefined,
+      recordingAssigneeId: form.value.recordingAssigneeId || undefined,
+      editorId: form.value.editorId || undefined,
     });
     emit('created');
   } catch (e: any) {
