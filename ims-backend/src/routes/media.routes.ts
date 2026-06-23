@@ -36,7 +36,7 @@ const createRecordingSchema = z.object({
 // GET /api/v1/media/recordings
 router.get('/recordings', mediaOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { status, search, mine } = req.query;
+    const { status, search, mine, stage } = req.query;
     const where: any = {};
 
     // Employees see only recordings assigned to them unless ?mine=false
@@ -48,7 +48,17 @@ router.get('/recordings', mediaOnly, async (req: Request, res: Response, next: N
       ];
     }
 
-    if (status) where.status = status as string;
+    // Stage filter: 'capture' shows only CAPTURED, 'editing' shows IN_EDITING+EDITED, 'post' shows APPROVED+PUBLISHED
+    if (stage === 'capture') {
+      where.status = 'CAPTURED';
+    } else if (stage === 'editing') {
+      where.status = { in: ['IN_EDITING', 'EDITED'] };
+    } else if (stage === 'post') {
+      where.status = { in: ['APPROVED', 'PUBLISHED'] };
+    } else if (status) {
+      where.status = status as string;
+    }
+
     if (search) where.title = { contains: search as string };
 
     const recordings = await prisma.recording.findMany({
