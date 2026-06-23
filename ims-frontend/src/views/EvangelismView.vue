@@ -2,7 +2,7 @@
   <div class="h-full flex flex-col">
     <div class="mb-6">
       <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Evangelism Department</h1>
-      <p class="text-gray-500 dark:text-gray-400 mt-1">Manage events, preachers, and reports</p>
+      <p class="text-gray-500 dark:text-gray-400 mt-1">Manage events, preachers, and approvals</p>
     </div>
 
     <!-- Tabs -->
@@ -26,9 +26,6 @@
       <div v-if="activeTab === 'events'" class="h-full">
         <EventsView />
       </div>
-      <div v-else-if="activeTab === 'activity'" class="h-full">
-        <ActivitySummaryView />
-      </div>
       <div v-else-if="activeTab === 'preachers'" class="h-full">
         <PreachersView />
       </div>
@@ -42,17 +39,15 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import EventsView from './evangelism/EventsView.vue';
-import ActivitySummaryView from './evangelism/ActivitySummaryView.vue';
 import PreachersView from './evangelism/PreachersView.vue';
 import ApprovalsView from './evangelism/ApprovalsView.vue';
 
-type TabId = 'events' | 'activity' | 'preachers' | 'approvals';
+type TabId = 'events' | 'preachers' | 'approvals';
 
 const activeTab = ref<TabId>('events');
 
 const tabs: Array<{ id: TabId; label: string }> = [
   { id: 'events', label: '📅 Events' },
-  { id: 'activity', label: '📊 Activity' },
   { id: 'preachers', label: '🎤 Preachers' },
   { id: 'approvals', label: '✅ Approvals' },
 ];
