@@ -195,7 +195,10 @@ router.patch('/recordings/:id', mediaOnly, async (req: Request, res: Response, n
 // POST /api/v1/media/recordings/:id/start-editing — assign editor + move to IN_EDITING
 router.post('/recordings/:id/start-editing', mediaOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const current = await prisma.recording.findUniqueOrThrow({ where: { id: req.params.id } });
+    const current = await prisma.recording.findUniqueOrThrow({
+      where: { id: req.params.id },
+      include: { event: { select: { title: true } } },
+    });
     if (!ALLOWED_TRANSITIONS[current.status]?.includes('IN_EDITING')) {
       res.status(400).json({ error: 'Invalid transition', message: `Cannot start editing from ${current.status}` });
       return;
@@ -214,6 +217,44 @@ router.post('/recordings/:id/start-editing', mediaOnly, async (req: Request, res
         recordingAssignee: { select: { id: true, name: true } },
       },
     });
+
+    // Auto-create an editing task so it shows up on the Editing page
+    try {
+      // Find or create a default editing project for recordings
+      let editingProject = await prisma.editingProject.findFirst({
+        where: { title: 'Sermon Recordings' },
+      });
+      if (!editingProject) {
+        editingProject = await prisma.editingProject.create({
+          data: {
+            title: 'Sermon Recordings',
+            description: 'Auto-created project for sermon recording edits',
+            status: 'IN_PROGRESS',
+            deadline: new Date(Date.now() + 30 * 86400000), // 30 days from now
+            createdById: req.user!.id,
+          },
+        });
+      }
+
+      // Create the editing task linked to this recording
+      await prisma.editingTask.create({
+        data: {
+          projectId: editingProject.id,
+          title: `Edit: ${current.title}`,
+          description: current.event?.title
+            ? `Edit the recording for sermon "${current.event.title}"`
+            : `Edit recording: ${current.title}`,
+          assigneeId: editorId,
+          priority: 'MEDIUM',
+          status: 'IN_PROGRESS',
+          deadline: new Date(Date.now() + 7 * 86400000), // 7 days deadline
+          fileUrl: (current as any).editedVideoUrl || null,
+        },
+      });
+    } catch (editingErr) {
+      console.error('[Auto-editing-task] Failed:', editingErr);
+    }
+
     res.json(recording);
   } catch (err) { next(err); }
 });
