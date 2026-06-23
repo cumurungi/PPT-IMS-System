@@ -157,7 +157,7 @@ CREATE TABLE `MediaAsset` (
     `fileType` VARCHAR(191) NOT NULL,
     `fileSizeBytes` BIGINT NOT NULL,
     `category` VARCHAR(191) NOT NULL,
-    `tags` TEXT NOT NULL DEFAULT '[]',
+    `tags` TEXT NULL,
     `thumbnailUrl` VARCHAR(191) NULL,
     `recordingId` VARCHAR(191) NULL,
     `uploadedById` VARCHAR(191) NOT NULL,

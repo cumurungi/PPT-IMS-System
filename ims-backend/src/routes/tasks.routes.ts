@@ -12,7 +12,7 @@ const createTaskSchema = z.object({
   description: z.string().min(1),
   assigneeId: z.string(),
   deadline: z.string(),
-  projectId: z.string(),
+  projectId: z.string().optional(),
   crossDepartment: z.boolean().optional(),
 });
 
@@ -29,8 +29,12 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       // Admin sees all tasks, can filter by department
       if (department) where.project = { department: department as any };
     } else if (user.role === 'MANAGER') {
-      // Manager sees department tasks
-      where.project = { department: user.department as any };
+      // Manager sees department tasks (including tasks without projects)
+      where.OR = [
+        { project: { department: user.department as any } },
+        { projectId: null, assignee: { department: user.department as any } },
+        { projectId: null, createdById: user.id },
+      ];
     } else {
       // Employee sees only their tasks
       where.assigneeId = user.id;
@@ -68,6 +72,30 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/v1/tasks/assignable-users — users this person can assign tasks to
+router.get('/assignable-users', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = req.user!;
+    const where: any = { isActive: true };
+
+    if (user.role === 'MANAGER') {
+      // Managers see only their department members
+      where.department = user.department;
+    } else if (user.role === 'EMPLOYEE') {
+      // Employees can only assign to themselves
+      where.id = user.id;
+    }
+    // Admin sees everyone
+
+    const users = await prisma.user.findMany({
+      where,
+      select: { id: true, name: true, email: true, role: true, department: true },
+      orderBy: { name: 'asc' },
+    });
+    res.json(users);
+  } catch (err) { next(err); }
+});
+
 // GET /api/v1/tasks/stats
 router.get('/stats', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -95,16 +123,66 @@ router.get('/stats', async (req: Request, res: Response, next: NextFunction) => 
 });
 
 // POST /api/v1/tasks
-router.post('/', requireRole('ADMIN', 'MANAGER'), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const data = createTaskSchema.parse(req.body);
+    const user = req.user!;
+
+    // Employees can only create tasks assigned to themselves
+    if (user.role === 'EMPLOYEE') {
+      data.assigneeId = user.id;
+    }
+
+    // Managers can only assign to their own department members
+    if (user.role === 'MANAGER' && data.assigneeId !== user.id) {
+      const assignee = await prisma.user.findUnique({ where: { id: data.assigneeId }, select: { department: true } });
+      if (assignee && assignee.department !== user.department) {
+        res.status(403).json({ error: 'Forbidden', message: 'You can only assign tasks to employees in your department' });
+        return;
+      }
+    }
+
     const task = await prisma.task.create({
-      data: { ...data, deadline: new Date(data.deadline), createdById: req.user!.id },
+      data: {
+        title: data.title,
+        description: data.description,
+        assigneeId: data.assigneeId,
+        deadline: new Date(data.deadline),
+        projectId: data.projectId || null,
+        createdById: user.id,
+        crossDepartment: data.crossDepartment || false,
+      },
       include: {
         assignee: { select: { id: true, name: true, email: true } },
+        createdBy: { select: { id: true, name: true, email: true } },
         project: { select: { id: true, name: true, department: true } },
       },
     });
+
+    // Send email notification
+    // If employee created it (self-assigned), notify their manager
+    // If manager assigned it, notify the assignee
+    try {
+      const { sendTaskAssignedEmail, sendEmail } = require('../lib/email');
+      if (user.role === 'EMPLOYEE') {
+        // Notify the department manager that an employee created a task
+        const manager = await prisma.user.findFirst({
+          where: { department: user.department as any, role: 'MANAGER', isActive: true },
+          select: { email: true, name: true },
+        });
+        if (manager) {
+          sendEmail({
+            to: manager.email,
+            subject: `[IMS] New task from ${user.name}: ${task.title}`,
+            text: `${user.name} created a new task "${task.title}" in project "${task.project?.name}". Please review and accept or deny it.`,
+            html: `<div style="font-family:sans-serif;max-width:500px;"><h2 style="color:#4f46e5;">📋 New Task Created</h2><p><strong>${user.name}</strong> created a new task that needs your review:</p><div style="background:#f3f4f6;border-radius:8px;padding:16px;margin:16px 0;"><p style="margin:4px 0;"><strong>📋 Task:</strong> ${task.title}</p><p style="margin:4px 0;"><strong>📁 Project:</strong> ${task.project?.name}</p></div><p>Please log in to accept or deny it.</p><p style="color:#6b7280;font-size:12px;">— IMS System</p></div>`,
+          });
+        }
+      } else if (task.assignee?.email && task.assigneeId !== user.id) {
+        sendTaskAssignedEmail(task.assignee.email, task.assignee.name, task.title, task.project?.name || 'Unknown');
+      }
+    } catch {}
+
     res.status(201).json(task);
   } catch (err) { next(err); }
 });
@@ -132,15 +210,182 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
 // PATCH /api/v1/tasks/:id
 router.patch('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const user = req.user!;
+    const body = req.body;
+
+    // Employees can only update the status of their own assigned tasks
+    if (user.role === 'EMPLOYEE') {
+      const task = await prisma.task.findUniqueOrThrow({ where: { id: req.params.id } });
+      if (task.assigneeId !== user.id) {
+        res.status(403).json({ error: 'Forbidden', message: 'You can only update tasks assigned to you' });
+        return;
+      }
+      // Employees may only change status — not reassign, retitle, or change project
+      const allowedFields = ['status'];
+      const attempted = Object.keys(body).filter(k => !allowedFields.includes(k));
+      if (attempted.length > 0) {
+        res.status(403).json({ error: 'Forbidden', message: 'Employees can only update task status' });
+        return;
+      }
+    }
+
     const task = await prisma.task.update({
       where: { id: req.params.id },
-      data: req.body,
+      data: body,
+      include: {
+        assignee: { select: { id: true, name: true, email: true, department: true } },
+        project: { select: { id: true, name: true, department: true } },
+        linkedEvents: { select: { id: true, title: true, status: true, date: true } },
+      },
+    });
+
+    // Auto-trigger: When Evangelism task is marked COMPLETED, create a sermon + media request
+    if (body.status === 'COMPLETED') {
+      const dept = task.assignee?.department || task.project?.department;
+      if (dept === 'EVANGELISM') {
+        try {
+          // Create sermon event from the task, linking back to the source task
+          const sermon = await prisma.event.create({
+            data: {
+              title: task.title,
+              description: task.description || null,
+              date: task.deadline || new Date(),
+              location: 'Studio',
+              eventType: 'Single Sermon',
+              status: 'PLANNED',
+              sourceTaskId: task.id,
+              createdById: user.id,
+            },
+          });
+
+          // Auto-create media request
+          const mediaRequest = await prisma.mediaRequest.create({
+            data: {
+              eventId: sermon.id,
+              requestedById: user.id,
+              recordingType: 'Studio Recording',
+              requestedDate: task.deadline || new Date(),
+              status: 'PENDING',
+            },
+          });
+
+          // Notify Media Manager
+          const { sendEmail } = require('../lib/email');
+          const mediaManager = await prisma.user.findFirst({
+            where: { department: 'MEDIA', role: 'MANAGER', isActive: true },
+            select: { id: true, email: true },
+          });
+          if (mediaManager) {
+            await prisma.notification.create({
+              data: { userId: mediaManager.id, type: 'APPROVAL_REQUIRED', title: 'New sermon to record', body: `Task completed: "${task.title}" — auto-scheduled for recording.`, entityType: 'MediaRequest', entityId: mediaRequest.id },
+            }).catch(() => {});
+            sendEmail({
+              to: mediaManager.email,
+              subject: `[IMS] 🎬 New sermon to record: ${task.title}`,
+              text: `A task was completed in Evangelism and a sermon has been auto-scheduled:\n\nTitle: ${task.title}\n\nPlease log in to accept and assign a recorder.`,
+              html: `<div style="font-family:sans-serif;max-width:500px;"><h2 style="color:#4f46e5;">🎬 New Sermon Auto-Scheduled</h2><p>An Evangelism task was completed and triggered a recording request:</p><div style="background:#f3f4f6;border-radius:8px;padding:16px;margin:16px 0;"><p style="margin:4px 0;"><strong>📖 Title:</strong> ${task.title}</p></div><p>Please log in to accept and assign a recorder.</p><p style="color:#6b7280;font-size:12px;">— IMS System</p></div>`,
+            });
+          }
+        } catch (autoErr) { console.error('[Auto-schedule] Failed:', autoErr); }
+      }
+    }
+
+    res.json(task);
+  } catch (err) { next(err); }
+});
+
+// POST /api/v1/tasks/:id/accept — Assignee accepts the task
+router.post('/:id/accept', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const task = await prisma.task.findUniqueOrThrow({
+      where: { id: req.params.id },
+      include: {
+        assignee: { select: { id: true, name: true, email: true } },
+        createdBy: { select: { id: true, name: true, email: true } },
+        project: { select: { id: true, name: true } },
+      },
+    });
+
+    if (task.assigneeId !== req.user!.id) {
+      res.status(403).json({ error: 'Forbidden', message: 'Only the assignee can accept/deny a task' });
+      return;
+    }
+
+    // Move to IN_PROGRESS on accept
+    const updated = await prisma.task.update({
+      where: { id: req.params.id },
+      data: { status: 'IN_PROGRESS' },
       include: {
         assignee: { select: { id: true, name: true, email: true } },
         project: { select: { id: true, name: true, department: true } },
       },
     });
-    res.json(task);
+
+    // Email the creator that task was accepted
+    try {
+      const { sendEmail } = require('../lib/email');
+      if (task.createdBy?.email) {
+        sendEmail({
+          to: task.createdBy.email,
+          subject: `[IMS] ✅ Task accepted: ${task.title}`,
+          text: `${task.assignee?.name} has accepted the task "${task.title}" in project "${task.project?.name}".`,
+          html: `<div style="font-family:sans-serif;max-width:500px;"><h2 style="color:#16a34a;">✅ Task Accepted</h2><p><strong>${task.assignee?.name}</strong> has accepted the task:</p><div style="background:#f0fdf4;border-radius:8px;padding:16px;margin:16px 0;"><p style="margin:4px 0;"><strong>📋 Task:</strong> ${task.title}</p><p style="margin:4px 0;"><strong>📁 Project:</strong> ${task.project?.name}</p></div><p style="color:#6b7280;font-size:12px;">— IMS System</p></div>`,
+        });
+      }
+    } catch {}
+
+    res.json(updated);
+  } catch (err) { next(err); }
+});
+
+// POST /api/v1/tasks/:id/deny — Assignee denies the task
+router.post('/:id/deny', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { reason } = z.object({ reason: z.string().min(1) }).parse(req.body);
+
+    const task = await prisma.task.findUniqueOrThrow({
+      where: { id: req.params.id },
+      include: {
+        assignee: { select: { id: true, name: true, email: true } },
+        createdBy: { select: { id: true, name: true, email: true } },
+        project: { select: { id: true, name: true } },
+      },
+    });
+
+    if (task.assigneeId !== req.user!.id) {
+      res.status(403).json({ error: 'Forbidden', message: 'Only the assignee can accept/deny a task' });
+      return;
+    }
+
+    // Move to BLOCKED on deny
+    const updated = await prisma.task.update({
+      where: { id: req.params.id },
+      data: { status: 'BLOCKED' },
+      include: {
+        assignee: { select: { id: true, name: true, email: true } },
+        project: { select: { id: true, name: true, department: true } },
+      },
+    });
+
+    // Add a comment explaining the denial
+    await prisma.taskComment.create({
+      data: { taskId: req.params.id, authorId: req.user!.id, body: `❌ Task denied: ${reason}` },
+    });
+
+    // Email the creator that task was denied
+    try {
+      const { sendEmail } = require('../lib/email');
+      if (task.createdBy?.email) {
+        sendEmail({
+          to: task.createdBy.email,
+          subject: `[IMS] ❌ Task denied: ${task.title}`,
+          text: `${task.assignee?.name} has denied the task "${task.title}".\n\nReason: ${reason}`,
+          html: `<div style="font-family:sans-serif;max-width:500px;"><h2 style="color:#dc2626;">❌ Task Denied</h2><p><strong>${task.assignee?.name}</strong> has denied the task:</p><div style="background:#fef2f2;border-radius:8px;padding:16px;margin:16px 0;"><p style="margin:4px 0;"><strong>📋 Task:</strong> ${task.title}</p><p style="margin:4px 0;"><strong>📁 Project:</strong> ${task.project?.name}</p><p style="margin:4px 0;"><strong>💬 Reason:</strong> ${reason}</p></div><p style="color:#6b7280;font-size:12px;">— IMS System</p></div>`,
+        });
+      }
+    } catch {}
+
+    res.json(updated);
   } catch (err) { next(err); }
 });
 

@@ -8,7 +8,7 @@
       </div>
       <label class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 cursor-pointer transition-colors">
         <span>+</span> Upload Asset
-        <input type="file" class="hidden" @change="handleUpload" />
+        <input type="file" class="hidden" accept="video/*,audio/*,image/*,.pdf,.doc,.docx" @change="handleUpload" />
       </label>
     </div>
 
@@ -31,12 +31,17 @@
         <option value="Document">Document</option>
         <option value="Other">Other</option>
       </select>
+      <DateFilter v-model:month="filterMonth" v-model:year="filterYear" />
     </div>
 
     <!-- Upload progress -->
     <div v-if="uploading" class="mb-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-3 flex items-center gap-2 text-sm text-indigo-700 dark:text-indigo-300">
       <div class="animate-spin rounded-full h-4 w-4 border-2 border-indigo-500 border-t-transparent"></div>
       Uploading {{ uploadProgress }}%...
+    </div>
+
+    <div v-if="uploadError" class="mb-4 bg-red-50 dark:bg-red-900/20 rounded-lg p-3 text-sm text-red-700 dark:text-red-300">
+      {{ uploadError }}
     </div>
 
     <!-- Loading -->
@@ -46,13 +51,13 @@
 
     <!-- Asset grid -->
     <div v-else class="flex-1 overflow-y-auto">
-      <div v-if="filteredAssets.length === 0" class="text-center py-16 text-gray-400 dark:text-gray-500">
+      <div v-if="paginatedItems.length === 0" class="text-center py-16 text-gray-400 dark:text-gray-500">
         <p class="text-4xl mb-3">🗃️</p>
         <p class="text-sm">No media assets yet. Upload one to get started.</p>
       </div>
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
         <div
-          v-for="asset in filteredAssets"
+          v-for="asset in paginatedItems"
           :key="asset.id"
           class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-shadow group"
         >
@@ -78,6 +83,7 @@
           </div>
         </div>
       </div>
+      <Pagination :page="page" :page-size="12" :total="total" @change="setPage" />
     </div>
 
     <!-- Asset metadata modal (after upload) -->
@@ -128,6 +134,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import api from '@/api/axios';
+import Pagination from '@/components/shared/Pagination.vue';
+import DateFilter from '@/components/shared/DateFilter.vue';
+import { usePagination } from '@/composables/usePagination';
 
 const assets = ref<any[]>([]);
 const loading = ref(true);
@@ -135,6 +144,7 @@ const searchQuery = ref('');
 const filterCategory = ref('');
 const uploading = ref(false);
 const uploadProgress = ref(0);
+const uploadError = ref('');
 const pendingUpload = ref<any>(null);
 const assetForm = ref({ title: '', category: '' });
 const tagsInput = ref('');
@@ -151,6 +161,8 @@ const filteredAssets = computed(() => {
   }
   return result;
 });
+
+const { page, filterMonth, filterYear, total, paginatedItems, setPage } = usePagination(() => filteredAssets.value, 12);
 
 function categoryIcon(category: string) {
   const map: Record<string, string> = {
@@ -174,13 +186,13 @@ async function handleUpload(event: Event) {
 
   uploading.value = true;
   uploadProgress.value = 0;
+  uploadError.value = '';
 
   const formData = new FormData();
   formData.append('file', file);
 
   try {
     const { data } = await api.post('/upload/media-asset', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: (e) => {
         if (e.total) uploadProgress.value = Math.round((e.loaded / e.total) * 100);
       },
@@ -191,6 +203,8 @@ async function handleUpload(event: Event) {
     assetForm.value.category = guessCategory(data.mimeType);
   } catch (err) {
     console.error('Upload failed:', err);
+    const error = err as any;
+    uploadError.value = error?.response?.data?.message || error?.response?.data?.error || 'Upload failed. Please try again.';
   } finally {
     uploading.value = false;
     input.value = '';

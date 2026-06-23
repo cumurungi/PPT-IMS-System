@@ -25,7 +25,7 @@
     </div>
 
     <!-- Filter -->
-    <div class="flex items-center gap-3 mb-4 flex-shrink-0">
+    <div class="flex items-center gap-3 mb-4 flex-shrink-0 flex-wrap">
       <input
         v-model="searchQuery"
         type="text"
@@ -43,6 +43,15 @@
         <option value="APPROVED">Approved</option>
         <option value="PUBLISHED">Published</option>
       </select>
+      <!-- Managers can toggle between all recordings and their own -->
+      <button v-if="auth.isManager" @click="showMineOnly = !showMineOnly; refresh()"
+        :class="['px-3 py-1.5 text-xs rounded-full font-medium transition-colors',
+          showMineOnly
+            ? 'bg-indigo-600 text-white'
+            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600']">
+        {{ showMineOnly ? '👤 My recordings' : '👥 All recordings' }}
+      </button>
+      <DateFilter v-model:month="filterMonth" v-model:year="filterYear" />
     </div>
 
     <!-- Loading -->
@@ -52,13 +61,13 @@
 
     <!-- Recordings grid -->
     <div v-else class="flex-1 overflow-y-auto">
-      <div v-if="filteredRecordings.length === 0" class="text-center py-16 text-gray-400 dark:text-gray-500">
+      <div v-if="paginatedItems.length === 0" class="text-center py-16 text-gray-400 dark:text-gray-500">
         <p class="text-4xl mb-3">🎬</p>
         <p class="text-sm">No recordings found. Create one to start the workflow.</p>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <div
-          v-for="rec in filteredRecordings"
+          v-for="rec in paginatedItems"
           :key="rec.id"
           class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:shadow-lg transition-shadow cursor-pointer"
           @click="openRecording(rec)"
@@ -93,14 +102,25 @@
 
           <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
             <span>{{ rec.format }}</span>
-            <span v-if="rec.recordingAssignee">🎙️ {{ rec.recordingAssignee.name }}</span>
-            <span v-if="rec.editor">✏️ {{ rec.editor.name }}</span>
-            <span v-if="rec.editedVideoUrl">📹 Approval link ready</span>
             <span>{{ formatDate(rec.recordingDate) }}</span>
+          </div>
+          <!-- People assigned -->
+          <div class="mt-2 flex flex-wrap gap-2">
+            <span v-if="rec.recordingAssignee"
+              class="inline-flex items-center gap-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-xs px-2 py-0.5 rounded-full">
+              🎙️ {{ rec.recordingAssignee.name }}
+            </span>
+            <span v-if="rec.editor"
+              class="inline-flex items-center gap-1 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 text-xs px-2 py-0.5 rounded-full">
+              ✏️ {{ rec.editor.name }}
+            </span>
+            <span v-if="!rec.recordingAssignee && !rec.editor"
+              class="text-xs text-gray-300 dark:text-gray-600 italic">Not assigned</span>
           </div>
         </div>
       </div>
     </div>
+    <Pagination :page="page" :page-size="12" :total="total" @change="setPage" />
 
     <!-- Recording Detail Drawer -->
     <RecordingDrawer
@@ -122,10 +142,16 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import api from '@/api/axios';
+import { useAuthStore } from '@/stores/auth.store';
 import MiniStat from '@/components/tasks/MiniStat.vue';
 import RecordingStatusBadge from '@/components/media/RecordingStatusBadge.vue';
 import RecordingDrawer from '@/components/media/RecordingDrawer.vue';
 import CreateRecordingModal from '@/components/media/CreateRecordingModal.vue';
+import Pagination from '@/components/shared/Pagination.vue';
+import DateFilter from '@/components/shared/DateFilter.vue';
+import { usePagination } from '@/composables/usePagination';
+
+const auth = useAuthStore();
 
 const recordings = ref<any[]>([]);
 const stats = ref({ total: 0, captured: 0, inEditing: 0, edited: 0, approved: 0, published: 0 });
@@ -134,6 +160,7 @@ const searchQuery = ref('');
 const filterStatus = ref('');
 const selectedRecording = ref<any>(null);
 const showCreateModal = ref(false);
+const showMineOnly = ref(false);
 
 const workflowSteps = ['CAPTURED', 'IN_EDITING', 'EDITED', 'APPROVED', 'PUBLISHED'];
 
@@ -148,6 +175,8 @@ const filteredRecordings = computed(() => {
   }
   return result;
 });
+
+const { page, filterMonth, filterYear, total, paginatedItems, setPage } = usePagination(() => filteredRecordings.value, 12);
 
 function stepReached(currentStatus: string, step: string) {
   return workflowSteps.indexOf(currentStatus) >= workflowSteps.indexOf(step);
@@ -169,8 +198,10 @@ function openRecording(rec: any) {
 
 async function fetchData() {
   try {
+    const params: any = {};
+    if (showMineOnly.value) params.mine = 'true';
     const [recRes, statsRes] = await Promise.all([
-      api.get('/media/recordings'),
+      api.get('/media/recordings', { params }),
       api.get('/media/recordings/stats'),
     ]);
     recordings.value = recRes.data;

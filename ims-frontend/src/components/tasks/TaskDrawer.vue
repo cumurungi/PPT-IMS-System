@@ -40,6 +40,38 @@
           </div>
         </div>
 
+        <!-- Accept / Deny (for assignee when TODO, or for manager reviewing employee-created tasks) -->
+        <div v-if="task.status === 'TODO' && (task.assigneeId === auth.user?.id || (auth.isManager && task.createdById !== auth.user?.id))"
+          class="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4">
+          <p class="text-sm text-gray-700 dark:text-gray-300 mb-3">
+            {{ task.assigneeId === auth.user?.id ? 'This task has been assigned to you. Do you accept it?' : 'This task was created by an employee and needs your review.' }}
+          </p>
+          <div v-if="!showDenyForm" class="flex gap-2">
+            <button @click="acceptTask" :disabled="acting"
+              class="flex-1 py-2 text-sm bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg font-medium">
+              ✅ Accept
+            </button>
+            <button @click="showDenyForm = true" :disabled="acting"
+              class="flex-1 py-2 text-sm bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg font-medium">
+              ❌ Deny
+            </button>
+          </div>
+          <div v-else class="space-y-2">
+            <textarea v-model="denyReason" rows="2" placeholder="Reason for denying (required)..."
+              class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm resize-none focus:ring-2 focus:ring-indigo-500 outline-none"></textarea>
+            <div class="flex gap-2">
+              <button @click="denyTask" :disabled="acting || !denyReason.trim()"
+                class="flex-1 py-2 text-sm bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg font-medium">
+                Confirm Deny
+              </button>
+              <button @click="showDenyForm = false; denyReason = ''"
+                class="px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-400">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Status update -->
         <div>
           <label class="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium">Update Status</label>
@@ -106,13 +138,18 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import api from '@/api/axios';
+import { useAuthStore } from '@/stores/auth.store';
 import StatusBadge from './StatusBadge.vue';
 
 const props = defineProps<{ task: any }>();
 const emit = defineEmits(['close', 'updated']);
 
+const auth = useAuthStore();
 const comments = ref<any[]>([]);
 const newComment = ref('');
+const acting = ref(false);
+const showDenyForm = ref(false);
+const denyReason = ref('');
 
 const statuses = [
   { value: 'TODO', label: 'To Do' },
@@ -130,6 +167,26 @@ onMounted(async () => {
     comments.value = data;
   } catch {}
 });
+
+async function acceptTask() {
+  acting.value = true;
+  try {
+    await api.post(`/tasks/${props.task.id}/accept`);
+    emit('updated');
+  } catch (err) { console.error(err); }
+  finally { acting.value = false; }
+}
+
+async function denyTask() {
+  acting.value = true;
+  try {
+    await api.post(`/tasks/${props.task.id}/deny`, { reason: denyReason.value });
+    showDenyForm.value = false;
+    denyReason.value = '';
+    emit('updated');
+  } catch (err) { console.error(err); }
+  finally { acting.value = false; }
+}
 
 async function changeStatus(status: string) {
   if (status === props.task.status) return;

@@ -9,7 +9,6 @@
         </p>
       </div>
       <button
-        v-if="auth.isManager"
         @click="showCreateModal = true"
         class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
       >
@@ -50,6 +49,7 @@
           <option value="COMPLETED">Completed</option>
           <option value="BLOCKED">Blocked</option>
         </select>
+        <DateFilter v-model:month="filterMonth" v-model:year="filterYear" />
         <select
           v-if="auth.user?.role === 'ADMIN'"
           v-model="filterDept"
@@ -84,26 +84,26 @@
       <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
         <!-- Table header -->
         <div class="grid grid-cols-12 gap-2 px-4 py-3 bg-gray-50 dark:bg-gray-750 border-b border-gray-200 dark:border-gray-700 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-          <div class="col-span-4">Task</div>
+          <div class="col-span-3">Task</div>
           <div class="col-span-2">Project</div>
           <div class="col-span-2">Assignee</div>
           <div class="col-span-1">Status</div>
           <div class="col-span-1">Priority</div>
           <div class="col-span-1">Due</div>
-          <div class="col-span-1">Actions</div>
+          <div class="col-span-2">Actions</div>
         </div>
         <!-- Empty state -->
-        <div v-if="filteredTasks.length === 0" class="px-4 py-12 text-center text-sm text-gray-400 dark:text-gray-500">
-          No tasks found. {{ auth.isManager ? 'Create one to get started.' : '' }}
+        <div v-if="paginatedItems.length === 0" class="px-4 py-12 text-center text-sm text-gray-400 dark:text-gray-500">
+          No tasks found. Create one to get started.
         </div>
         <!-- Task rows -->
         <div
-          v-for="task in filteredTasks"
+          v-for="task in paginatedItems"
           :key="task.id"
           class="grid grid-cols-12 gap-2 px-4 py-3 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750 cursor-pointer transition-colors items-center"
           @click="openTask(task)"
         >
-          <div class="col-span-4">
+          <div class="col-span-3">
             <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{{ task.title }}</p>
             <p class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ task.description }}</p>
           </div>
@@ -120,8 +120,8 @@
             <StatusBadge :status="task.status" />
           </div>
           <div class="col-span-1">
-            <span :class="['text-xs font-medium', isOverdue(task) ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400']">
-              {{ isOverdue(task) ? '⚠️' : '' }}
+            <span :class="['text-xs font-medium px-1.5 py-0.5 rounded-full', priorityClass(task)]">
+              {{ isOverdue(task) ? 'Urgent' : 'Normal' }}
             </span>
           </div>
           <div class="col-span-1">
@@ -129,12 +129,23 @@
               {{ formatDate(task.deadline) }}
             </span>
           </div>
-          <div class="col-span-1 flex items-center gap-1">
-            <span v-if="task._count?.comments" class="text-xs text-gray-400">💬{{ task._count.comments }}</span>
-            <span v-if="task._count?.attachments" class="text-xs text-gray-400">📎{{ task._count.attachments }}</span>
+          <div class="col-span-2 flex items-center gap-1" @click.stop>
+            <button @click="openTask(task)" title="View"
+              class="p-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
+              👁️
+            </button>
+            <button @click="openTask(task)" title="Edit"
+              class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400">
+              ✏️
+            </button>
+            <button v-if="auth.isManager" @click="confirmDelete(task)" title="Delete"
+              class="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 dark:text-red-400">
+              🗑️
+            </button>
           </div>
         </div>
       </div>
+      <Pagination :page="page" :page-size="15" :total="total" @change="setPage" />
     </div>
 
     <!-- BOARD VIEW (Kanban) -->
@@ -172,6 +183,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth.store';
 import api from '@/api/axios';
 import StatusBadge from '@/components/tasks/StatusBadge.vue';
@@ -179,13 +191,17 @@ import MiniStat from '@/components/tasks/MiniStat.vue';
 import KanbanColumn from '@/components/tasks/KanbanColumn.vue';
 import TaskDrawer from '@/components/tasks/TaskDrawer.vue';
 import CreateTaskModal from '@/components/tasks/CreateTaskModal.vue';
+import Pagination from '@/components/shared/Pagination.vue';
+import DateFilter from '@/components/shared/DateFilter.vue';
+import { usePagination } from '@/composables/usePagination';
 
 const auth = useAuthStore();
+const route = useRoute();
 const tasks = ref<any[]>([]);
 const taskStats = ref({ total: 0, todo: 0, inProgress: 0, inReview: 0, completed: 0, blocked: 0, overdue: 0 });
 const loading = ref(true);
 const viewMode = ref<'list' | 'board'>('list');
-const searchQuery = ref('');
+const searchQuery = ref((route.query.search as string) || '');
 const filterStatus = ref('');
 const filterDept = ref('');
 const selectedTask = ref<any>(null);
@@ -214,12 +230,19 @@ const filteredTasks = computed(() => {
   return result;
 });
 
+const { page, filterMonth, filterYear, total, paginatedItems, setPage, resetPage } = usePagination(() => filteredTasks.value, 15);
+
 function getTasksByStatus(status: string) {
   return filteredTasks.value.filter(t => t.status === status);
 }
 
 function isOverdue(task: any) {
   return task.status !== 'COMPLETED' && new Date(task.deadline) < new Date();
+}
+
+function priorityClass(task: any) {
+  if (isOverdue(task)) return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
+  return 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400';
 }
 
 function formatDate(date: string) {
@@ -251,6 +274,21 @@ async function fetchTasks() {
 
 function openTask(task: any) {
   selectedTask.value = task;
+}
+
+function editTask(task: any) {
+  // Open the task in the drawer (same as view — editing is done there)
+  selectedTask.value = task;
+}
+
+async function confirmDelete(task: any) {
+  if (!confirm(`Delete "${task.title}"? This cannot be undone.`)) return;
+  try {
+    await api.delete(`/tasks/${task.id}`);
+    await fetchTasks();
+  } catch (err) {
+    console.error('Failed to delete task:', err);
+  }
 }
 
 async function updateTaskStatus(taskId: string, newStatus: string) {

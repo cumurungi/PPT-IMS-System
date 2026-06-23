@@ -24,10 +24,10 @@
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Project *</label>
-            <select v-model="form.projectId" required
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Project</label>
+            <select v-model="form.projectId"
               class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
-              <option value="">Select project</option>
+              <option value="">No project</option>
               <option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
           </div>
@@ -40,10 +40,21 @@
             </select>
           </div>
         </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Deadline *</label>
-          <input v-model="form.deadline" type="date" required
-            class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Deadline *</label>
+            <input v-model="form.deadline" type="date" required
+              class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Priority</label>
+            <select v-model="form.priority"
+              class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+              <option value="NORMAL">Normal</option>
+              <option value="HIGH">🔴 High</option>
+              <option value="URGENT">🚨 Urgent</option>
+            </select>
+          </div>
         </div>
 
         <p v-if="error" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
@@ -69,7 +80,7 @@ import api from '@/api/axios';
 
 const emit = defineEmits(['close', 'created']);
 
-const form = ref({ title: '', description: '', projectId: '', assigneeId: '', deadline: '' });
+const form = ref({ title: '', description: '', projectId: '', assigneeId: '', deadline: '', priority: 'NORMAL' });
 const projects = ref<any[]>([]);
 const users = ref<any[]>([]);
 const error = ref('');
@@ -79,10 +90,10 @@ onMounted(async () => {
   try {
     const [projRes, usersRes] = await Promise.all([
       api.get('/projects'),
-      api.get('/users'),
+      api.get('/tasks/assignable-users'),
     ]);
     projects.value = projRes.data?.data || projRes.data;
-    users.value = usersRes.data?.data || usersRes.data;
+    users.value = usersRes.data;
   } catch {}
 });
 
@@ -91,8 +102,11 @@ async function handleCreate() {
   submitting.value = true;
   try {
     await api.post('/tasks', {
-      ...form.value,
+      title: form.value.title,
+      description: form.value.description,
+      assigneeId: form.value.assigneeId,
       deadline: new Date(form.value.deadline).toISOString(),
+      projectId: form.value.projectId || undefined,
     });
     emit('created');
   } catch (e: any) {

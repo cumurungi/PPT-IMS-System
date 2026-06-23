@@ -34,6 +34,29 @@
         <StatCard icon="🔔" label="Notifications" :value="stats.personal.unreadNotifications" color="yellow" />
       </div>
 
+      <!-- Upcoming Deadlines -->
+      <div v-if="upcomingTasks.length > 0" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">⏰ Due Soon</h3>
+          <RouterLink to="/tasks" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">View all →</RouterLink>
+        </div>
+        <div class="space-y-2">
+          <div v-for="task in upcomingTasks" :key="task.id"
+            class="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
+            <div class="flex items-center gap-3 min-w-0">
+              <span :class="['w-2 h-2 rounded-full flex-shrink-0', task.isOverdue ? 'bg-red-500' : task.isToday ? 'bg-orange-500' : 'bg-blue-500']"></span>
+              <div class="min-w-0">
+                <p class="text-sm text-gray-900 dark:text-gray-100 truncate">{{ task.title }}</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">{{ task.project }}</p>
+              </div>
+            </div>
+            <span :class="['text-xs font-medium whitespace-nowrap ml-3', task.isOverdue ? 'text-red-600' : task.isToday ? 'text-orange-600' : 'text-gray-500 dark:text-gray-400']">
+              {{ task.dueLabel }}
+            </span>
+          </div>
+        </div>
+      </div>
+
       <!-- ADMIN DASHBOARD -->
       <template v-if="stats.admin">
         <!-- Organization Overview -->
@@ -234,11 +257,37 @@ import DeptCard from '@/components/dashboard/DeptCard.vue';
 const auth = useAuthStore();
 const stats = ref<any>(null);
 const loading = ref(true);
+const upcomingTasks = ref<any[]>([]);
 
 onMounted(async () => {
   try {
-    const { data } = await api.get('/dashboard/stats');
-    stats.value = data;
+    const [dashRes, tasksRes] = await Promise.all([
+      api.get('/dashboard/stats'),
+      api.get('/tasks'),
+    ]);
+    stats.value = dashRes.data;
+
+    // Process upcoming tasks (due within 7 days or overdue)
+    const now = new Date();
+    const weekFromNow = new Date(now.getTime() + 7 * 86400000);
+    upcomingTasks.value = (tasksRes.data || [])
+      .filter((t: any) => t.status !== 'COMPLETED' && t.deadline)
+      .map((t: any) => {
+        const deadline = new Date(t.deadline);
+        const diffDays = Math.ceil((deadline.getTime() - now.getTime()) / 86400000);
+        return {
+          id: t.id,
+          title: t.title,
+          project: t.project?.name || '—',
+          isOverdue: diffDays < 0,
+          isToday: diffDays === 0,
+          dueLabel: diffDays < 0 ? `${Math.abs(diffDays)}d overdue` : diffDays === 0 ? 'Today' : diffDays === 1 ? 'Tomorrow' : `${diffDays}d left`,
+          deadline,
+        };
+      })
+      .filter((t: any) => t.isOverdue || t.deadline <= weekFromNow)
+      .sort((a: any, b: any) => a.deadline.getTime() - b.deadline.getTime())
+      .slice(0, 5);
   } catch (err) {
     console.error('Failed to load dashboard stats:', err);
   } finally {

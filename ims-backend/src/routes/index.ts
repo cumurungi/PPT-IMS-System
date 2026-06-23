@@ -5,6 +5,7 @@ import departmentsRoutes from './departments.routes';
 import projectsRoutes from './projects.routes';
 import tasksRoutes from './tasks.routes';
 import mediaRoutes from './media.routes';
+import mediaEditingRoutes from './media-editing.routes';
 import evangelismRoutes from './evangelism.routes';
 import hrRoutes from './hr.routes';
 import itRoutes from './it.routes';
@@ -14,6 +15,7 @@ import searchRoutes from './search.routes';
 import auditRoutes from './audit.routes';
 import dashboardRoutes from './dashboard.routes';
 import uploadRoutes from './upload.routes';
+import messagesRoutes from './messages.routes';
 
 const router = Router();
 
@@ -24,6 +26,7 @@ router.use('/departments', departmentsRoutes);
 router.use('/projects', projectsRoutes);
 router.use('/tasks', tasksRoutes);
 router.use('/media', mediaRoutes);
+router.use('/media/editing', mediaEditingRoutes);
 router.use('/evangelism', evangelismRoutes);
 router.use('/hr', hrRoutes);
 router.use('/it', itRoutes);
@@ -32,5 +35,6 @@ router.use('/notifications', notificationsRoutes);
 router.use('/search', searchRoutes);
 router.use('/audit-logs', auditRoutes);
 router.use('/upload', uploadRoutes);
+router.use('/messages', messagesRoutes);
 
 export default router;

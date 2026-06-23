@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import prisma from '../lib/prisma';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me';
 
@@ -8,6 +9,7 @@ export interface JwtPayload {
   role: string;
   department: string | null;
   email: string;
+  name?: string;
 }
 
 export function authenticate(req: Request, res: Response, next: NextFunction): void {
@@ -23,9 +25,11 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
     const payload = jwt.verify(token, JWT_SECRET) as JwtPayload;
     req.user = {
       id: payload.id,
+      name: payload.name || '',
       role: payload.role as any,
       department: payload.department as any,
       email: payload.email,
+      permissions: null, // loaded on demand by requirePermission middleware
     };
     next();
   } catch {

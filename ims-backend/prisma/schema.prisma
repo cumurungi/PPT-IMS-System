@@ -169,6 +169,7 @@ model User {
   passwordHash         String
   role                 Role
   department           Department?
+  permissions          String?    @db.Text // JSON array of permission strings
   isActive             Boolean    @default(true)
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
@@ -205,6 +206,8 @@ model User {
   savedFilters         SavedFilter[]
   storageQuotas        StorageQuota[]       @relation("QuotaSetBy")
   employeeProfile      EmployeeProfile?
+  sentMessages         DirectMessage[]       @relation("MessageSender")
+  receivedMessages     DirectMessage[]       @relation("MessageReceiver")
 
   @@index([email])
   @@index([role])
@@ -296,8 +299,8 @@ model Task {
   description          String
   status               TaskStatus @default(TODO)
   deadline             DateTime
-  projectId            String
-  project              Project    @relation(fields: [projectId], references: [id])
+  projectId            String?
+  project              Project?   @relation(fields: [projectId], references: [id])
   assigneeId           String
   assignee             User       @relation("TaskAssignee", fields: [assigneeId], references: [id])
   createdById          String
@@ -308,6 +311,7 @@ model Task {
 
   comments             TaskComment[]
   attachments          TaskAttachment[]
+  linkedEvents         Event[]     @relation("TaskToEvent")
 
   @@index([assigneeId])
   @@index([status])
@@ -537,10 +541,13 @@ model PublishingQueuePlatform {
 model Event {
   id                   String      @id @default(cuid())
   title                String
+  description          String?
   date                 DateTime
   location             String
   eventType            String
   status               EventStatus @default(PLANNED)
+  sourceTaskId         String?
+  sourceTask           Task?       @relation("TaskToEvent", fields: [sourceTaskId], references: [id])
   createdById          String
   createdBy            User        @relation("EventCreator", fields: [createdById], references: [id])
   createdAt            DateTime    @default(now())
@@ -553,6 +560,7 @@ model Event {
 
   @@index([date])
   @@index([status])
+  @@index([sourceTaskId])
 }
 
 model Preacher {
@@ -850,4 +858,22 @@ model SavedFilter {
   createdAt            DateTime @default(now())
 
   @@index([userId, filterContext])
+}
+
+
+// ─── Direct Messages ──────────────────────────────────────────────────────────
+
+model DirectMessage {
+  id                   String   @id @default(cuid())
+  senderId             String
+  sender               User     @relation("MessageSender", fields: [senderId], references: [id])
+  receiverId           String
+  receiver             User     @relation("MessageReceiver", fields: [receiverId], references: [id])
+  body                 String   @db.Text
+  isRead               Boolean  @default(false)
+  createdAt            DateTime @default(now())
+
+  @@index([senderId, receiverId])
+  @@index([receiverId, isRead])
+  @@index([createdAt])
 }

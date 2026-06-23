@@ -20,8 +20,55 @@
             {{ rec.format }} · {{ formatDuration(rec.durationSeconds) }} · {{ new Date(rec.recordingDate).toLocaleDateString() }}
           </p>
           <p v-if="rec.event" class="text-xs text-gray-500 dark:text-gray-400 mt-1">📅 {{ rec.event.title }}</p>
-          <p v-if="rec.recordingAssignee" class="text-xs text-gray-500 dark:text-gray-400 mt-1">🎙️ Recording assignee: {{ rec.recordingAssignee.name }}</p>
-          <p v-if="rec.editor" class="text-xs text-gray-500 dark:text-gray-400 mt-1">✏️ Editing assignee: {{ rec.editor.name }}</p>
+        </div>
+
+        <!-- Assignees (editable by manager) -->
+        <div class="bg-gray-50 dark:bg-gray-900/40 rounded-xl p-4">
+          <div class="flex items-center justify-between mb-2">
+            <p class="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium">Team Assignments</p>
+            <button v-if="auth.isManager" @click="showAssignPanel = !showAssignPanel"
+              class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+              {{ showAssignPanel ? 'Cancel' : 'Edit' }}
+            </button>
+          </div>
+
+          <!-- Read-only display -->
+          <div v-if="!showAssignPanel" class="space-y-1.5">
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-500 dark:text-gray-400 w-24">🎙️ Recorder:</span>
+              <span v-if="rec.recordingAssignee" class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ rec.recordingAssignee.name }}</span>
+              <span v-else class="text-sm text-gray-300 dark:text-gray-600 italic">Not assigned</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-500 dark:text-gray-400 w-24">✏️ Editor:</span>
+              <span v-if="rec.editor" class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ rec.editor.name }}</span>
+              <span v-else class="text-sm text-gray-300 dark:text-gray-600 italic">Not assigned</span>
+            </div>
+          </div>
+
+          <!-- Editable panel (manager only) -->
+          <div v-if="showAssignPanel" class="space-y-3">
+            <div>
+              <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Recording Assignee</label>
+              <select v-model="assignRecorderId"
+                class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                <option value="">— None —</option>
+                <option v-for="u in teamMembers" :key="u.id" :value="u.id">{{ u.name }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Editor</label>
+              <select v-model="assignEditorId"
+                class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                <option value="">— None —</option>
+                <option v-for="u in teamMembers" :key="u.id" :value="u.id">{{ u.name }}</option>
+              </select>
+            </div>
+            <button @click="saveAssignments" :disabled="acting"
+              class="w-full py-2 text-sm bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg font-medium">
+              {{ acting ? 'Saving...' : 'Save Assignments' }}
+            </button>
+          </div>
         </div>
 
         <!-- Workflow progress -->
@@ -94,64 +141,49 @@
         </div>
 
         <!-- EDITED → Approve / Reject (managers only) -->
+        <!-- EDITED → Send to preacher for approval -->
         <div v-if="rec.status === 'EDITED'" class="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-4">
           <p class="text-sm text-gray-700 dark:text-gray-300 mb-3">
-            ⏳ This recording is awaiting approval.
+            ✏️ Editing complete. Send to the preacher for approval.
           </p>
-          <div class="mb-4 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
-            <p class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Approval video link (YouTube or Synology)</p>
-            <select
-              v-model="approvalVideoSource"
-              class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm mb-3 focus:ring-2 focus:ring-indigo-500 outline-none"
-            >
-              <option value="">Link source not decided yet</option>
-              <option value="YouTube">YouTube</option>
-              <option value="Synology">Synology</option>
-              <option value="Other">Other</option>
+          <!-- Video option: link OR upload -->
+          <div class="mb-3">
+            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Provide video for review</label>
+            <div class="flex gap-2 mb-2">
+              <button @click="videoMethod = 'link'" :class="['flex-1 py-1.5 text-xs rounded-lg border font-medium', videoMethod === 'link' ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400']">
+                🔗 Paste Link
+              </button>
+              <button @click="videoMethod = 'upload'" :class="['flex-1 py-1.5 text-xs rounded-lg border font-medium', videoMethod === 'upload' ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400']">
+                📁 Upload from Synology
+              </button>
+            </div>
+            <input v-if="videoMethod === 'link'" v-model="editedVideoUrl" type="url" placeholder="Paste YouTube/private link"
+              class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+            <div v-else>
+              <label class="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors">
+                <span class="text-sm text-gray-500 dark:text-gray-400">{{ uploadedFileName || '📁 Click to select video file' }}</span>
+                <input type="file" class="hidden" accept="video/*" @change="handleVideoUpload" />
+              </label>
+              <div v-if="videoUploading" class="mt-2 flex items-center gap-2 text-xs text-indigo-600 dark:text-indigo-400">
+                <div class="animate-spin rounded-full h-3 w-3 border-2 border-indigo-500 border-t-transparent"></div>
+                Uploading...
+              </div>
+            </div>
+          </div>
+          <!-- Select preacher -->
+          <div class="mb-3">
+            <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Select preacher to approve *</label>
+            <select v-model="selectedPreacherId"
+              class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+              <option value="">— Choose preacher —</option>
+              <option v-for="u in evangelismUsers" :key="u.id" :value="u.id">{{ u.name }}</option>
             </select>
-            <input
-              v-model="editedVideoUrl"
-              type="url"
-              placeholder="Paste YouTube or Synology link"
-              class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm mb-3 focus:ring-2 focus:ring-indigo-500 outline-none"
-            />
-            <button @click="saveEditedVideoLink" :disabled="acting"
-              class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white py-2 rounded-lg text-sm font-medium">
-              {{ acting ? 'Saving...' : 'Save Approval Link' }}
-            </button>
           </div>
-          <div v-if="rec.editedVideoUrl" class="mb-4 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
-            <p class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Approval video link{{ rec.approvalVideoSource ? ` (${rec.approvalVideoSource})` : '' }}
-            </p>
-            <a :href="rec.editedVideoUrl" target="_blank" rel="noopener noreferrer" class="text-sm text-blue-600 dark:text-blue-400 hover:underline break-all">
-              {{ rec.editedVideoUrl }}
-            </a>
-          </div>
-          <template v-if="auth.isManager">
-            <textarea v-model="approvalNotes" rows="2" placeholder="Approval notes (optional)..."
-              class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm mb-3 resize-none"></textarea>
-            <div class="flex gap-2">
-              <button @click="approve(true)" :disabled="acting"
-                class="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white py-2 rounded-lg text-sm font-medium">
-                ✅ Approve
-              </button>
-              <button @click="showReject = true" :disabled="acting"
-                class="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white py-2 rounded-lg text-sm font-medium">
-                ❌ Reject
-              </button>
-            </div>
-            <!-- Reject reason -->
-            <div v-if="showReject" class="mt-3">
-              <textarea v-model="rejectionReason" rows="2" placeholder="Reason for rejection..."
-                class="w-full border border-red-200 dark:border-red-800 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm mb-2 resize-none"></textarea>
-              <button @click="approve(false)" :disabled="acting || !rejectionReason"
-                class="w-full bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white py-2 rounded-lg text-sm font-medium">
-                Confirm Rejection
-              </button>
-            </div>
-          </template>
-          <p v-else class="text-xs text-gray-500 dark:text-gray-400">Waiting for a manager to review.</p>
+          <button @click="sendForApproval" :disabled="acting || !selectedPreacherId || (!editedVideoUrl && videoMethod === 'link')"
+            class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium">
+            {{ acting ? 'Sending...' : '📨 Send to Preacher for Approval' }}
+          </button>
+          <p v-if="sentForApproval" class="mt-2 text-sm text-green-600 dark:text-green-400">✅ Sent! The preacher will get an email.</p>
         </div>
 
         <!-- APPROVED -->
@@ -205,6 +237,16 @@ const rejectionReason = ref('');
 const showReject = ref(false);
 const editedVideoUrl = ref('');
 const approvalVideoSource = ref('');
+const showAssignPanel = ref(false);
+const assignRecorderId = ref('');
+const assignEditorId = ref('');
+const teamMembers = ref<any[]>([]);
+const selectedPreacherId = ref('');
+const evangelismUsers = ref<any[]>([]);
+const sentForApproval = ref(false);
+const videoMethod = ref<'link' | 'upload'>('link');
+const videoUploading = ref(false);
+const uploadedFileName = ref('');
 
 const workflowSteps = [
   { value: 'CAPTURED', label: 'Captured' },
@@ -218,11 +260,19 @@ onMounted(fetchRecording);
 
 async function fetchRecording() {
   try {
-    const { data } = await api.get(`/media/recordings/${props.recordingId}`);
-    rec.value = data;
-    localProgress.value = data.editingProgress;
-    editedVideoUrl.value = data.editedVideoUrl || '';
-    approvalVideoSource.value = data.approvalVideoSource || '';
+    const [recRes, teamRes, evangRes] = await Promise.all([
+      api.get(`/media/recordings/${props.recordingId}`),
+      api.get('/media/assignable-users'),
+      api.get('/media/evangelism-users').catch(() => ({ data: [] })),
+    ]);
+    rec.value = recRes.data;
+    localProgress.value = recRes.data.editingProgress;
+    editedVideoUrl.value = recRes.data.editedVideoUrl || '';
+    approvalVideoSource.value = recRes.data.approvalVideoSource || '';
+    assignRecorderId.value = recRes.data.recordingAssigneeId || '';
+    assignEditorId.value = recRes.data.editorId || '';
+    teamMembers.value = teamRes.data;
+    evangelismUsers.value = evangRes.data;
   } catch (err) {
     console.error('Failed to load recording:', err);
   } finally {
@@ -233,6 +283,47 @@ async function fetchRecording() {
 function stepReached(status: string) {
   const order = workflowSteps.map(s => s.value);
   return order.indexOf(rec.value?.status) >= order.indexOf(status);
+}
+
+async function sendForApproval() {
+  acting.value = true;
+  try {
+    await api.post(`/media/recordings/${props.recordingId}/send-for-approval`, {
+      preacherUserId: selectedPreacherId.value,
+      videoLink: editedVideoUrl.value || undefined,
+    });
+    sentForApproval.value = true;
+    emit('updated');
+  } catch (err) { console.error(err); }
+  finally { acting.value = false; }
+}
+
+async function handleVideoUpload(event: Event) {
+  const input = event.target as HTMLInputElement;
+  if (!input.files?.length) return;
+  videoUploading.value = true;
+  uploadedFileName.value = input.files[0].name;
+  const formData = new FormData();
+  formData.append('file', input.files[0]);
+  try {
+    const { data } = await api.post('/upload/media-asset', formData);
+    editedVideoUrl.value = 'http://localhost:3001' + data.fileUrl;
+  } catch (err) { console.error(err); }
+  finally { videoUploading.value = false; input.value = ''; }
+}
+
+async function saveAssignments() {
+  acting.value = true;
+  try {
+    await api.patch(`/media/recordings/${props.recordingId}`, {
+      recordingAssigneeId: assignRecorderId.value || null,
+      editorId: assignEditorId.value || null,
+    });
+    await fetchRecording();
+    showAssignPanel.value = false;
+    emit('updated');
+  } catch (err) { console.error(err); }
+  finally { acting.value = false; }
 }
 
 async function startEditing() {

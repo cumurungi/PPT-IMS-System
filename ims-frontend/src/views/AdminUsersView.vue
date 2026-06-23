@@ -83,6 +83,9 @@
           <div class="col-span-3 text-sm text-gray-600 dark:text-gray-300 truncate">{{ user.email }}</div>
           <div class="col-span-2">
             <span :class="['text-xs font-medium px-2 py-0.5 rounded-full', roleColor(user.role)]">{{ user.role }}</span>
+            <span v-if="getUserPermsCount(user) > 0" class="ml-1 text-xs text-gray-400" :title="getUserPermsCount(user) + ' permissions'">
+              🔑{{ getUserPermsCount(user) }}
+            </span>
           </div>
           <div class="col-span-2 text-sm text-gray-600 dark:text-gray-300">{{ formatDept(user.department) }}</div>
           <div class="col-span-1">
@@ -150,6 +153,29 @@
             </div>
           </div>
 
+          <!-- Permissions -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Permissions</label>
+            <div class="max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-lg p-3 space-y-3">
+              <div v-for="group in permissionGroups" :key="group.name">
+                <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">{{ group.name }}</p>
+                <div class="space-y-1">
+                  <label v-for="perm in group.permissions" :key="perm.id"
+                    class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 rounded px-2 py-1">
+                    <input type="checkbox" :value="perm.id" v-model="form.permissions"
+                      class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500" />
+                    <span class="text-xs text-gray-700 dark:text-gray-300">{{ perm.label }}</span>
+                  </label>
+                </div>
+              </div>
+              <p v-if="availablePermissions.length === 0" class="text-xs text-gray-400 italic">Loading permissions...</p>
+            </div>
+            <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">
+              {{ form.permissions.length }} permission{{ form.permissions.length !== 1 ? 's' : '' }} selected
+              <span v-if="form.role === 'ADMIN'" class="text-purple-500 ml-1">· Admins have full access regardless</span>
+            </p>
+          </div>
+
           <p v-if="error" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
 
           <div class="flex justify-end gap-3 pt-2">
@@ -206,12 +232,22 @@ const filterStatus = ref('');
 
 const showModal = ref(false);
 const editingId = ref<string | null>(null);
-const form = ref({ name: '', email: '', password: '', role: 'EMPLOYEE', department: '' });
+const form = ref({ name: '', email: '', password: '', role: 'EMPLOYEE', department: '', permissions: [] as string[] });
 const error = ref('');
 const submitting = ref(false);
 
 const resetUser = ref<any>(null);
 const newPassword = ref('');
+
+const availablePermissions = ref<any[]>([]);
+const permissionGroups = computed(() => {
+  const groups: Record<string, { name: string; permissions: any[] }> = {};
+  for (const p of availablePermissions.value) {
+    if (!groups[p.group]) groups[p.group] = { name: p.group, permissions: [] };
+    groups[p.group].permissions.push(p);
+  }
+  return Object.values(groups);
+});
 
 const filteredUsers = computed(() => {
   let result = users.value;
@@ -241,16 +277,25 @@ function formatDept(d: string | null) {
   return map[d] || d;
 }
 
+function getUserPermsCount(user: any): number {
+  if (!user.permissions) return 0;
+  try {
+    const perms = typeof user.permissions === 'string' ? JSON.parse(user.permissions) : user.permissions;
+    return Array.isArray(perms) ? perms.length : 0;
+  } catch { return 0; }
+}
+
 function openCreate() {
   editingId.value = null;
-  form.value = { name: '', email: '', password: '', role: 'EMPLOYEE', department: '' };
+  form.value = { name: '', email: '', password: '', role: 'EMPLOYEE', department: '', permissions: [] };
   error.value = '';
   showModal.value = true;
 }
 
 function openEdit(user: any) {
   editingId.value = user.id;
-  form.value = { name: user.name, email: user.email, password: '', role: user.role, department: user.department || '' };
+  const perms = user.permissions ? (typeof user.permissions === 'string' ? JSON.parse(user.permissions) : user.permissions) : [];
+  form.value = { name: user.name, email: user.email, password: '', role: user.role, department: user.department || '', permissions: perms };
   error.value = '';
   showModal.value = true;
 }
@@ -269,6 +314,7 @@ async function handleSubmit() {
       email: form.value.email,
       role: form.value.role,
       department: form.value.role === 'ADMIN' ? null : (form.value.department || null),
+      permissions: form.value.permissions,
     };
     if (editingId.value) {
       await api.patch(`/users/${editingId.value}`, payload);
@@ -314,6 +360,11 @@ async function fetchData() {
     ]);
     users.value = usersRes.data.data;
     stats.value = statsRes.data;
+    // Load permissions separately (non-blocking)
+    try {
+      const permsRes = await api.get('/users/permissions');
+      availablePermissions.value = permsRes.data;
+    } catch {}
   } catch (err) {
     console.error('Failed to load users:', err);
   } finally {

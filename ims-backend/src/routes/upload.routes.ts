@@ -27,6 +27,41 @@ const upload = multer({
   limits: { fileSize: 100 * 1024 * 1024 }, // 100MB per file
 });
 
+const mediaStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    const uploadDir = path.join(process.cwd(), 'uploads', 'media');
+    fs.mkdirSync(uploadDir, { recursive: true });
+    cb(null, uploadDir);
+  },
+  filename: (_req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, uniqueSuffix + ext);
+  },
+});
+
+const mediaUpload = multer({
+  storage: mediaStorage,
+  limits: { fileSize: 2.5 * 1024 * 1024 * 1024 }, // 2.5GB per media asset
+});
+
+function handleUploadError(err: any, _req: Request, res: Response, next: NextFunction) {
+  if (!err) {
+    next();
+    return;
+  }
+
+  if (err instanceof multer.MulterError) {
+    const message = err.code === 'LIMIT_FILE_SIZE'
+      ? 'File is too large. Media assets can be up to 2GB.'
+      : err.message;
+    res.status(413).json({ error: err.code, message });
+    return;
+  }
+
+  next(err);
+}
+
 // POST /api/v1/upload/project/:projectId
 // Supports multiple files (folder upload sends multiple files with paths)
 router.post('/project/:projectId', upload.array('files', 50), async (req: Request, res: Response, next: NextFunction) => {
@@ -135,20 +170,22 @@ function buildFileTree(files: any[]) {
 }
 
 // POST /api/v1/upload/media-asset — single file upload for media library
-router.post('/media-asset', upload.single('file'), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/media-asset', mediaUpload.single('file'), handleUploadError, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const file = req.file;
     if (!file) {
       res.status(400).json({ error: 'No file uploaded' });
       return;
     }
+    console.log('Media asset upload successful:', file.filename);
     res.status(201).json({
-      fileUrl: `/uploads/projects/${file.filename}`,
+      fileUrl: `/uploads/media/${file.filename}`,
       fileName: file.originalname,
       fileSizeBytes: file.size,
       mimeType: file.mimetype,
     });
   } catch (err) {
+    console.error('Media asset upload error:', err);
     next(err);
   }
 });

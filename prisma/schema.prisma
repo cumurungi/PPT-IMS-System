@@ -163,6 +163,7 @@ model User {
   passwordHash         String
   role                 Role
   department           Department?
+  permissions          String?    @db.Text // JSON array of permission strings
   isActive             Boolean    @default(true)
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
@@ -282,6 +283,7 @@ model Task {
 
   comments             TaskComment[]
   attachments          TaskAttachment[]
+  linkedEvents         Event[]     @relation("TaskToEvent")
 
   @@index([assigneeId])
   @@index([status])
@@ -450,10 +452,13 @@ model PublishingQueuePlatform {
 model Event {
   id                   String      @id @default(cuid())
   title                String
+  description          String?
   date                 DateTime
   location             String
   eventType            String
   status               EventStatus @default(PLANNED)
+  sourceTaskId         String?
+  sourceTask           Task?       @relation("TaskToEvent", fields: [sourceTaskId], references: [id])
   createdById          String
   createdBy            User        @relation("EventCreator", fields: [createdById], references: [id])
   createdAt            DateTime    @default(now())
@@ -466,6 +471,7 @@ model Event {
 
   @@index([date])
   @@index([status])
+  @@index([sourceTaskId])
 }
 
 model Preacher {

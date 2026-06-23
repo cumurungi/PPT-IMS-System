@@ -36,8 +36,18 @@ const createRecordingSchema = z.object({
 // GET /api/v1/media/recordings
 router.get('/recordings', mediaOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { status, search } = req.query;
+    const { status, search, mine } = req.query;
     const where: any = {};
+
+    // Employees see only recordings assigned to them unless ?mine=false
+    // Managers/Admins see all unless ?mine=true
+    if (req.user!.role === 'EMPLOYEE' || mine === 'true') {
+      where.OR = [
+        { recordingAssigneeId: req.user!.id },
+        { editorId: req.user!.id },
+      ];
+    }
+
     if (status) where.status = status as string;
     if (search) where.title = { contains: search as string };
 
@@ -82,6 +92,18 @@ router.get('/assignable-users', mediaOnly, async (_req: Request, res: Response, 
         ],
       },
       select: { id: true, name: true, email: true, role: true, department: true },
+      orderBy: { name: 'asc' },
+    });
+    res.json(users);
+  } catch (err) { next(err); }
+});
+
+// GET /api/v1/media/evangelism-users — list evangelism dept users for preacher selection
+router.get('/evangelism-users', mediaOnly, async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const users = await prisma.user.findMany({
+      where: { department: 'EVANGELISM', isActive: true },
+      select: { id: true, name: true, email: true, role: true },
       orderBy: { name: 'asc' },
     });
     res.json(users);
@@ -178,11 +200,13 @@ router.post('/recordings/:id/start-editing', mediaOnly, async (req: Request, res
       res.status(400).json({ error: 'Invalid transition', message: `Cannot start editing from ${current.status}` });
       return;
     }
+    // Use explicitly provided editorId, or fall back to recordingAssignee, then the current user
+    const editorId = req.body.editorId || current.recordingAssigneeId || req.user!.id;
     const recording = await prisma.recording.update({
       where: { id: req.params.id },
       data: {
         status: 'IN_EDITING',
-        editorId: req.body.editorId || req.user!.id,
+        editorId,
         editingProgress: 0,
       },
       include: {
@@ -194,18 +218,64 @@ router.post('/recordings/:id/start-editing', mediaOnly, async (req: Request, res
   } catch (err) { next(err); }
 });
 
-// POST /api/v1/media/recordings/:id/approve — Manager approve/reject
+// POST /api/v1/media/recordings/:id/send-for-approval — Editor sends to preacher for approval
+const sendForApprovalSchema = z.object({
+  preacherUserId: z.string().min(1),  // The evangelism user who will approve
+  videoLink: z.string().optional(),    // YouTube/private link for preacher to watch
+});
+
+router.post('/recordings/:id/send-for-approval', mediaOnly, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { preacherUserId, videoLink } = sendForApprovalSchema.parse(req.body);
+    const current = await prisma.recording.findUniqueOrThrow({ where: { id: req.params.id } });
+
+    if (current.status !== 'EDITED') {
+      res.status(400).json({ error: 'Invalid state', message: 'Recording must be in EDITED status to send for approval' });
+      return;
+    }
+
+    // Save the video link and mark who should approve
+    await prisma.recording.update({
+      where: { id: req.params.id },
+      data: {
+        editedVideoUrl: videoLink || current.editedVideoUrl,
+      },
+    });
+
+    // Notify the preacher (Evangelism user) by email + notification
+    try {
+      const { sendEmail } = require('../lib/email');
+      const preacher = await prisma.user.findUnique({ where: { id: preacherUserId }, select: { id: true, email: true, name: true } });
+      if (preacher) {
+        await prisma.notification.create({
+          data: { userId: preacher.id, type: 'APPROVAL_REQUIRED', title: 'Sermon ready for your approval', body: `"${current.title}" has been edited and needs your approval.`, entityType: 'Recording', entityId: req.params.id },
+        }).catch(() => {});
+        sendEmail({
+          to: preacher.email,
+          subject: `[IMS] 🎬 Sermon ready for approval: ${current.title}`,
+          text: `Your sermon "${current.title}" has been edited and is ready for your approval.\n\n${videoLink ? 'Watch here: ' + videoLink + '\n\n' : ''}Please log in to IMS to approve or request changes.`,
+          html: `<div style="font-family:sans-serif;max-width:500px;"><h2 style="color:#4f46e5;">🎬 Sermon Ready for Approval</h2><p>Your sermon has been edited and needs your approval:</p><div style="background:#f3f4f6;border-radius:8px;padding:16px;margin:16px 0;"><p style="margin:4px 0;"><strong>📖 Title:</strong> ${current.title}</p>${videoLink ? '<p style="margin:4px 0;"><strong>🔗 Watch:</strong> <a href="' + videoLink + '">' + videoLink + '</a></p>' : ''}</div><p>Please log in to IMS to approve or request changes.</p><p style="color:#6b7280;font-size:12px;">— IMS System</p></div>`,
+        });
+      }
+    } catch {}
+
+    res.json({ message: 'Sent to preacher for approval' });
+  } catch (err) { next(err); }
+});
+
+// POST /api/v1/media/recordings/:id/approve — Preacher (Evangelism) approves/rejects
 const approvalSchema = z.object({
   decision: z.boolean(),
   notes: z.string().optional(),
   rejectionReason: z.string().optional(),
 });
 
-router.post('/recordings/:id/approve', mediaOnly, async (req: Request, res: Response, next: NextFunction) => {
+router.post('/recordings/:id/approve', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // Only managers/admins can approve
-    if (req.user!.role === 'EMPLOYEE') {
-      res.status(403).json({ error: 'Forbidden', message: 'Only managers can approve content' });
+    // All Evangelism dept users and Admins can approve
+    const user = req.user!;
+    if (user.department !== 'EVANGELISM' && user.role !== 'ADMIN') {
+      res.status(403).json({ error: 'Forbidden', message: 'Only Evangelism team members can approve sermons' });
       return;
     }
 
@@ -235,11 +305,32 @@ router.post('/recordings/:id/approve', mediaOnly, async (req: Request, res: Resp
       }),
     ]);
 
-    // If approved, auto-add to publishing queue
+    // If approved, auto-add to publishing queue and notify IT team
     if (decision) {
       await prisma.publishingQueue.create({
         data: { recordingId: req.params.id, priority: 50 },
       }).catch(() => {}); // ignore if already queued
+
+      // Notify all IT department members (manager + employees)
+      try {
+        const { sendEmail } = require('../lib/email');
+        const recordingTitle = current.title || 'Untitled';
+        const itMembers = await prisma.user.findMany({
+          where: { department: 'IT', isActive: true },
+          select: { id: true, email: true, name: true },
+        });
+        for (const member of itMembers) {
+          await prisma.notification.create({
+            data: { userId: member.id, type: 'WORKFLOW_ALERT', title: 'New recording ready to publish', body: `"${recordingTitle}" has been approved and added to the publishing queue.`, entityType: 'Recording', entityId: req.params.id },
+          }).catch(() => {});
+          sendEmail({
+            to: member.email,
+            subject: `[IMS] 📡 Ready to publish: ${recordingTitle}`,
+            text: `A recording has been approved and is ready to be published:\n\nTitle: ${recordingTitle}\n\nPlease log in to IMS and publish it on the platforms.`,
+            html: `<div style="font-family:sans-serif;max-width:500px;"><h2 style="color:#4f46e5;">📡 Ready to Publish</h2><p>A recording has been approved and added to the publishing queue:</p><div style="background:#f3f4f6;border-radius:8px;padding:16px;margin:16px 0;"><p style="margin:4px 0;"><strong>🎬 Title:</strong> ${recordingTitle}</p></div><p>Please log in to IMS and publish it on YouTube, Website, App, Instagram, Facebook, TikTok.</p><p style="color:#6b7280;font-size:12px;">— IMS System</p></div>`,
+          });
+        }
+      } catch {}
     }
 
     res.json({ recording, message: decision ? 'Recording approved and queued for publishing' : 'Recording sent back for editing' });
@@ -314,16 +405,91 @@ router.delete('/assets/:id', async (req: Request, res: Response, next: NextFunct
 // ─── MEDIA REQUESTS ──────────────────────────────────────────────────────────
 
 // GET /api/v1/media/requests
-router.get('/requests', mediaOnly, async (_req: Request, res: Response, next: NextFunction) => {
+router.get('/requests', mediaOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const { status } = req.query;
+    const where: any = {};
+    if (status) where.status = status as string;
+
     const requests = await prisma.mediaRequest.findMany({
+      where,
       orderBy: { createdAt: 'desc' },
+      include: {
+        event: { select: { id: true, title: true, date: true, location: true } },
+        requestedBy: { select: { id: true, name: true, department: true } },
+      },
+    });
+    res.json(requests);
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/v1/media/requests/:id — Media team accept or decline
+const respondRequestSchema = z.object({
+  status: z.enum(['ACCEPTED', 'DECLINED']),
+  declineReason: z.string().optional(),
+  assignedToId: z.string().optional(), // team member assigned to do the recording
+});
+
+router.patch('/requests/:id', mediaOnly, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = respondRequestSchema.parse(req.body);
+
+    const mediaRequest = await prisma.mediaRequest.update({
+      where: { id: req.params.id },
+      data: {
+        status: data.status,
+        declineReason: data.status === 'DECLINED' ? (data.declineReason || null) : null,
+      },
       include: {
         event: { select: { id: true, title: true } },
         requestedBy: { select: { id: true, name: true } },
       },
     });
-    res.json(requests);
+
+    // When accepted, auto-create a Recording record linked to this event
+    // and assign the chosen team member as recordingAssignee
+    if (data.status === 'ACCEPTED') {
+      const event = await prisma.event.findUnique({ where: { id: mediaRequest.eventId } });
+      if (event) {
+        await prisma.recording.create({
+          data: {
+            title: event.title,
+            eventId: event.id,
+            mediaRequestId: mediaRequest.id,
+            recordingDate: event.date,
+            durationSeconds: 0,
+            format: 'MP4',
+            status: 'CAPTURED',
+            createdById: req.user!.id,
+            recordingAssigneeId: data.assignedToId || null,
+          },
+        }).catch(() => {}); // ignore if recording already exists for this request
+
+        // Email the assigned team member
+        try {
+          const { sendRecordingAssignedEmail } = require('../lib/email');
+          if (data.assignedToId) {
+            const assignee = await prisma.user.findUnique({ where: { id: data.assignedToId }, select: { id: true, email: true, name: true } });
+            if (assignee) {
+              sendRecordingAssignedEmail(assignee.email, assignee.name, event.title);
+              await prisma.notification.create({
+                data: { userId: assignee.id, type: 'TASK_ASSIGNED', title: 'Recording assigned to you', body: `"${event.title}" — please record this sermon.`, entityType: 'Recording', entityId: mediaRequest.id },
+              }).catch(() => {});
+            }
+          }
+        } catch {}
+
+        // Email the person who requested (from evangelism)
+        try {
+          const { sendMediaRequestAcceptedEmail } = require('../lib/email');
+          const requester = await prisma.user.findUnique({ where: { id: mediaRequest.requestedBy?.id || '' }, select: { email: true, name: true } });
+          const assignee = data.assignedToId ? await prisma.user.findUnique({ where: { id: data.assignedToId }, select: { name: true } }) : null;
+          if (requester) sendMediaRequestAcceptedEmail(requester.email, requester.name, event.title, assignee?.name || 'Media team');
+        } catch {}
+      }
+    }
+
+    res.json(mediaRequest);
   } catch (err) { next(err); }
 });
 
