@@ -4,7 +4,7 @@
     <div class="flex items-center justify-between mb-4 flex-shrink-0">
       <div>
         <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Recordings</h1>
-        <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Capture → Edit → Approve → Publish workflow</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Captured sermons waiting to start editing</p>
       </div>
       <button
         @click="showCreateModal = true"
@@ -198,7 +198,7 @@ function openRecording(rec: any) {
 
 async function fetchData() {
   try {
-    const params: any = {};
+    const params: any = { stage: 'capture' };
     if (showMineOnly.value) params.mine = 'true';
     const [recRes, statsRes] = await Promise.all([
       api.get('/media/recordings', { params }),

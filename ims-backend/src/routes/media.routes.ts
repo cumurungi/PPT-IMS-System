@@ -52,9 +52,7 @@ router.get('/recordings', mediaOnly, async (req: Request, res: Response, next: N
     if (stage === 'capture') {
       where.status = 'CAPTURED';
     } else if (stage === 'editing') {
-      where.status = { in: ['IN_EDITING', 'EDITED'] };
-    } else if (stage === 'post') {
-      where.status = { in: ['APPROVED', 'PUBLISHED'] };
+      where.status = { in: ['IN_EDITING', 'EDITED', 'APPROVED', 'PUBLISHED'] };
     } else if (status) {
       where.status = status as string;
     }
