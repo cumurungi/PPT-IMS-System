@@ -511,4 +511,80 @@ function mapToSermon(event: any) {
   };
 }
 
+// ─── AUDIOBOOKS (Evangelism-managed recordings) ───────────────────────────────
+// These are separate from sermons — recorded by Evangelism team themselves
+// Flow: Proof Reading → Ready to Record → Recording → Completed
+
+const createAudiobookSchema = z.object({
+  title: z.string().min(1),
+  bookName: z.string().min(1),
+  chapters: z.string().optional(),
+  reader: z.string().optional(),
+});
+
+const updateAudiobookSchema = z.object({
+  title: z.string().min(1).optional(),
+  bookName: z.string().min(1).optional(),
+  chapters: z.string().optional(),
+  reader: z.string().optional(),
+  status: z.enum(['PROOF_READING', 'READY', 'RECORDING', 'COMPLETED']).optional(),
+});
+
+// GET /api/v1/evangelism/audiobooks
+router.get('/audiobooks', evangOnly, async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const audiobooks = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT * FROM Audiobook ORDER BY createdAt DESC`
+    );
+    res.json(audiobooks);
+  } catch (err) { next(err); }
+});
+
+// POST /api/v1/evangelism/audiobooks
+router.post('/audiobooks', evangOnly, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = createAudiobookSchema.parse(req.body);
+    const id = require('crypto').randomBytes(12).toString('hex');
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO Audiobook (id, title, bookName, chapters, reader, status, createdById, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, 'PROOF_READING', ?, ?, ?)`,
+      id, data.title, data.bookName, data.chapters || null, data.reader || null, req.user!.id, now, now
+    );
+    const [audiobook] = await prisma.$queryRawUnsafe<any[]>(`SELECT * FROM Audiobook WHERE id = ?`, id);
+    res.status(201).json(audiobook);
+  } catch (err) { next(err); }
+});
+
+// PATCH /api/v1/evangelism/audiobooks/:id
+router.patch('/audiobooks/:id', evangOnly, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = updateAudiobookSchema.parse(req.body);
+    const sets: string[] = [];
+    const values: any[] = [];
+
+    if (data.title) { sets.push('title = ?'); values.push(data.title); }
+    if (data.bookName) { sets.push('bookName = ?'); values.push(data.bookName); }
+    if (data.chapters !== undefined) { sets.push('chapters = ?'); values.push(data.chapters || null); }
+    if (data.reader !== undefined) { sets.push('reader = ?'); values.push(data.reader || null); }
+    if (data.status) { sets.push('status = ?'); values.push(data.status); }
+
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    sets.push('updatedAt = ?');
+    values.push(now);
+    values.push(req.params.id);
+
+    await prisma.$executeRawUnsafe(`UPDATE Audiobook SET ${sets.join(', ')} WHERE id = ?`, ...values);
+    const [audiobook] = await prisma.$queryRawUnsafe<any[]>(`SELECT * FROM Audiobook WHERE id = ?`, req.params.id);
+    res.json(audiobook);
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/v1/evangelism/audiobooks/:id
+router.delete('/audiobooks/:id', evangOnly, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await prisma.$executeRawUnsafe(`DELETE FROM Audiobook WHERE id = ?`, req.params.id);
+    res.status(204).send();
+  } catch (err) { next(err); }
+});
+
 export default router;

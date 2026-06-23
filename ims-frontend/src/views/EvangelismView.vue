@@ -2,7 +2,7 @@
   <div class="h-full flex flex-col">
     <div class="mb-6">
       <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Evangelism Department</h1>
-      <p class="text-gray-500 dark:text-gray-400 mt-1">Manage events, preachers, and approvals</p>
+      <p class="text-gray-500 dark:text-gray-400 mt-1">Sermons, audiobooks, preachers, and approvals</p>
     </div>
 
     <!-- Tabs -->
@@ -23,8 +23,11 @@
     </div>
 
     <div class="flex-1 overflow-hidden">
-      <div v-if="activeTab === 'events'" class="h-full">
+      <div v-if="activeTab === 'sermons'" class="h-full">
         <EventsView />
+      </div>
+      <div v-else-if="activeTab === 'audiobooks'" class="h-full">
+        <AudiobooksView />
       </div>
       <div v-else-if="activeTab === 'preachers'" class="h-full">
         <PreachersView />
@@ -39,15 +42,17 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import EventsView from './evangelism/EventsView.vue';
+import AudiobooksView from './evangelism/AudiobooksView.vue';
 import PreachersView from './evangelism/PreachersView.vue';
 import ApprovalsView from './evangelism/ApprovalsView.vue';
 
-type TabId = 'events' | 'preachers' | 'approvals';
+type TabId = 'sermons' | 'audiobooks' | 'preachers' | 'approvals';
 
-const activeTab = ref<TabId>('events');
+const activeTab = ref<TabId>('sermons');
 
 const tabs: Array<{ id: TabId; label: string }> = [
-  { id: 'events', label: '📅 Schedule' },
+  { id: 'sermons', label: '📖 Sermons' },
+  { id: 'audiobooks', label: '🎧 Audiobooks' },
   { id: 'preachers', label: '🎤 Preachers' },
   { id: 'approvals', label: '✅ Approvals' },
 ];
