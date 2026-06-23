@@ -29,7 +29,7 @@
       <!-- Personal Stats (all users see this) -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon="✅" label="My Tasks" :value="stats.personal.totalTasks" color="blue" />
-        <StatCard icon="🎯" label="Completed" :value="stats.personal.completedTasks" color="green" />
+        <StatCard icon="🎯" label="Tasks Completed" :value="stats.personal.completedTasks" color="green" />
         <StatCard icon="⚠️" label="Overdue" :value="stats.personal.overdueTasks" color="red" />
         <StatCard icon="🔔" label="Notifications" :value="stats.personal.unreadNotifications" color="yellow" />
       </div>
@@ -167,11 +167,11 @@
           <div class="grid grid-cols-2 gap-4">
             <div class="text-center">
               <p class="text-2xl font-bold text-blue-600">{{ stats.evangelism.upcomingEvents }}</p>
-              <p class="text-xs text-gray-500 dark:text-gray-400">Upcoming Events</p>
+              <p class="text-xs text-gray-500 dark:text-gray-400">Scheduled (Waiting to Record)</p>
             </div>
             <div class="text-center">
               <p class="text-2xl font-bold text-green-600">{{ stats.evangelism.completedEvents }}</p>
-              <p class="text-xs text-gray-500 dark:text-gray-400">Completed Events</p>
+              <p class="text-xs text-gray-500 dark:text-gray-400">Recorded</p>
             </div>
           </div>
         </div>

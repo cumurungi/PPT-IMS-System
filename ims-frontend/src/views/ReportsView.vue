@@ -63,7 +63,7 @@
               </div>
               <div v-else-if="r.user.department === 'EVANGELISM'" class="bg-orange-50 dark:bg-orange-900/20 rounded-lg px-2 py-1.5 text-center">
                 <p class="text-lg font-bold text-orange-700 dark:text-orange-300">{{ (r.summary.eventsThisWeek || 0) + (r.summary.eventsNextWeek || 0) }}</p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">Events</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">Sermons</p>
               </div>
               <div v-else-if="r.user.department === 'IT'" class="bg-gray-50 dark:bg-gray-700 rounded-lg px-2 py-1.5 text-center">
                 <p class="text-lg font-bold text-gray-700 dark:text-gray-300">{{ r.summary.published }}</p>
@@ -110,19 +110,19 @@
               </div>
               <!-- Evangelism: sermons + approvals + events this/next week -->
               <div v-if="r.user.department === 'EVANGELISM' && r.details.sermons?.length > 0">
-                <p class="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">📖 Sermons Scheduled:</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">📖 Sermons Scheduled This Week:</p>
                 <ul class="list-disc list-inside text-xs text-gray-700 dark:text-gray-300 space-y-0.5">
                   <li v-for="t in r.details.sermons" :key="t">{{ t }}</li>
                 </ul>
               </div>
               <div v-if="r.user.department === 'EVANGELISM' && r.details.eventsFromTasks?.length > 0">
-                <p class="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">🔗 Events Created from Tasks:</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">🔗 Sermons Created from Completed Tasks:</p>
                 <ul class="list-disc list-inside text-xs text-gray-700 dark:text-gray-300 space-y-0.5">
                   <li v-for="t in r.details.eventsFromTasks" :key="t">{{ t }}</li>
                 </ul>
               </div>
               <div v-if="r.user.department === 'EVANGELISM' && r.details.eventsThisWeek?.length > 0">
-                <p class="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">📅 Events This Week:</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">📅 Sermons Recorded This Week:</p>
                 <ul class="text-xs text-gray-700 dark:text-gray-300 space-y-1">
                   <li v-for="e in r.details.eventsThisWeek" :key="e.title" class="flex items-center gap-2">
                     <span :class="eventStatusDot(e.status)"></span>
@@ -134,7 +134,7 @@
                 </ul>
               </div>
               <div v-if="r.user.department === 'EVANGELISM' && r.details.eventsNextWeek?.length > 0" class="mt-2 pt-2 border-t border-indigo-100 dark:border-indigo-900/30">
-                <p class="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">📆 Events Next Week:</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">📆 Sermons to Record Next Week:</p>
                 <ul class="text-xs text-gray-700 dark:text-gray-300 space-y-1">
                   <li v-for="e in r.details.eventsNextWeek" :key="e.title" class="flex items-center gap-2">
                     <span :class="eventStatusDot(e.status)"></span>
