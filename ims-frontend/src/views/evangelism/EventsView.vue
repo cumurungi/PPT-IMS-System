@@ -3,14 +3,14 @@
     <!-- Header -->
     <div class="flex items-center justify-between mb-4 flex-shrink-0">
       <div>
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Sermon Schedule</h2>
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Recording Schedule</h2>
         <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-          Schedule sermons for studio recording — Media team is notified automatically
+          Sermons & Audiobooks — Media team is notified automatically
         </p>
       </div>
       <button @click="showCreate = true"
         class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
-        <span>+</span> Schedule Sermon
+        <span>+</span> Schedule Recording
       </button>
     </div>
 
@@ -25,8 +25,14 @@
 
     <!-- Filters -->
     <div class="flex items-center gap-3 mb-4 flex-shrink-0 flex-wrap">
-      <input v-model="search" type="text" placeholder="Search sermons..."
+      <input v-model="search" type="text" placeholder="Search..."
         class="border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm w-52 focus:ring-2 focus:ring-indigo-500 outline-none" />
+      <select v-model="filterCategory"
+        class="border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+        <option value="">All Types</option>
+        <option value="sermon">📖 Sermons</option>
+        <option value="audiobook">🎧 Audiobooks</option>
+      </select>
       <select v-model="filterStatus"
         class="border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
         <option value="">All Statuses</option>
@@ -138,6 +144,7 @@ const stats = ref<any>({});
 const loading = ref(true);
 const search = ref('');
 const filterStatus = ref('');
+const filterCategory = ref('');
 const filterSeries = ref('');
 const showCreate = ref(false);
 const selectedSermon = ref<any>(null);
@@ -164,6 +171,11 @@ const filtered = computed(() => {
       e.title.toLowerCase().includes(q) ||
       (e.scriptureReference || '').toLowerCase().includes(q)
     );
+  }
+  if (filterCategory.value === 'audiobook') {
+    result = result.filter(e => (e.series || e.eventType || '').toLowerCase().startsWith('audiobook'));
+  } else if (filterCategory.value === 'sermon') {
+    result = result.filter(e => !(e.series || e.eventType || '').toLowerCase().startsWith('audiobook'));
   }
   if (filterStatus.value) result = result.filter(e => e.status === filterStatus.value);
   if (filterSeries.value) result = result.filter(e => (e.series || e.eventType) === filterSeries.value);

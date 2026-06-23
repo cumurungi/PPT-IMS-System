@@ -47,7 +47,7 @@ type TabId = 'events' | 'preachers' | 'approvals';
 const activeTab = ref<TabId>('events');
 
 const tabs: Array<{ id: TabId; label: string }> = [
-  { id: 'events', label: '📅 Events' },
+  { id: 'events', label: '📅 Schedule' },
   { id: 'preachers', label: '🎤 Preachers' },
   { id: 'approvals', label: '✅ Approvals' },
 ];
