@@ -552,10 +552,10 @@ router.post('/audiobooks', evangOnly, async (req: Request, res: Response, next: 
   } catch (err) { next(err); }
 });
 
-// PATCH /api/v1/evangelism/audiobooks/:id — update fileUrl, approved, bookName, reader
+// PATCH /api/v1/evangelism/audiobooks/:id — update fileUrl, approved, bookName, reader, chapters
 router.patch('/audiobooks/:id', evangOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { fileUrl, approved, bookName, reader } = req.body;
+    const { fileUrl, approved, bookName, reader, chapters } = req.body;
     const sets: string[] = [];
     const values: any[] = [];
 
@@ -563,6 +563,7 @@ router.patch('/audiobooks/:id', evangOnly, async (req: Request, res: Response, n
     if (approved !== undefined) { sets.push('approved = ?'); values.push(approved ? 1 : 0); }
     if (bookName !== undefined) { sets.push('bookName = ?'); values.push(bookName); }
     if (reader !== undefined) { sets.push('reader = ?'); values.push(reader); }
+    if (chapters !== undefined) { sets.push('chapters = ?'); values.push(JSON.stringify(chapters)); }
 
     if (sets.length === 0) { res.status(400).json({ error: 'Nothing to update' }); return; }
 

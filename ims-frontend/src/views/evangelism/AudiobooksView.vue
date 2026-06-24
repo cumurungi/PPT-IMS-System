@@ -129,7 +129,7 @@
         <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Edit Audiobook</h2>
         </div>
-        <form @submit.prevent="handleEdit" class="px-6 py-5 space-y-4">
+        <form @submit.prevent="handleEdit" class="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Book Name</label>
             <input v-model="editForm.bookName" type="text" required
@@ -139,6 +139,13 @@
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reader</label>
             <input v-model="editForm.reader" type="text" required
               class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Chapters</label>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Edit existing or add new chapters (one per line). Already-recorded chapters keep their status.</p>
+            <textarea v-model="editForm.chaptersText" rows="8"
+              class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+              placeholder="Chapter 1: Title&#10;Chapter 2: Title" />
           </div>
           <div class="flex justify-end gap-3 pt-2">
             <button type="button" @click="editingBook = null"
@@ -220,7 +227,7 @@ const submitting = ref(false);
 const uploading = ref<string | null>(null);
 const createForm = ref({ bookName: '', reader: '', chaptersText: '' });
 const editingBook = ref<Audiobook | null>(null);
-const editForm = ref({ bookName: '', reader: '' });
+const editForm = ref({ bookName: '', reader: '', chaptersText: '' });
 const page = ref(1);
 const pageSize = 5;
 
@@ -308,15 +315,28 @@ async function approveBook(bookId: string) {
 
 function openEdit(book: Audiobook) {
   editingBook.value = book;
-  editForm.value = { bookName: book.bookName, reader: book.reader };
+  editForm.value = {
+    bookName: book.bookName,
+    reader: book.reader,
+    chaptersText: book.chapters.map(c => c.title).join('\n'),
+  };
 }
 
 async function handleEdit() {
   if (!editingBook.value) return;
   try {
+    // Parse new chapters list, preserving "done" status for existing ones
+    const newTitles = editForm.value.chaptersText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const oldChapters = editingBook.value.chapters;
+    const chapters = newTitles.map(title => {
+      const existing = oldChapters.find(c => c.title === title);
+      return { title, done: existing ? existing.done : false };
+    });
+
     await api.patch(`/evangelism/audiobooks/${editingBook.value.id}`, {
       bookName: editForm.value.bookName,
       reader: editForm.value.reader,
+      chapters,
     });
     toast.success('Book updated');
     editingBook.value = null;
