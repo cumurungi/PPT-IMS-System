@@ -27,7 +27,7 @@
 
     <!-- Book list -->
     <div v-else class="flex-1 overflow-y-auto space-y-4">
-      <div v-for="book in audiobooks" :key="book.id"
+      <div v-for="book in paginatedBooks" :key="book.id"
         class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
         <!-- Book header -->
         <div class="flex items-start justify-between mb-3">
@@ -38,8 +38,11 @@
             </p>
           </div>
           <div class="flex items-center gap-2">
+            <!-- Edit / Delete -->
+            <button @click="openEdit(book)" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">✏️</button>
+            <button @click="deleteBook(book.id)" class="text-xs text-red-500 hover:text-red-700">🗑️</button>
             <!-- Overall progress -->
-            <span class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ Math.round(completedCount(book) / Math.max(book.chapters.length, 1) * 100) }}%</span>
+            <span class="text-xs font-medium text-gray-500 dark:text-gray-400 ml-2">{{ Math.round(completedCount(book) / Math.max(book.chapters.length, 1) * 100) }}%</span>
             <!-- Status badge -->
             <span v-if="completedCount(book) === book.chapters.length && book.chapters.length > 0"
               :class="['text-xs font-medium px-2 py-1 rounded-full', book.approved ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300']">
@@ -104,6 +107,46 @@
             ✅ Audiobook approved and complete
           </div>
         </div>
+      </div>
+      <!-- Pagination -->
+      <div v-if="audiobooks.length > pageSize" class="flex items-center justify-center gap-2 py-4">
+        <button @click="page = Math.max(1, page - 1)" :disabled="page === 1"
+          class="px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">
+          ← Prev
+        </button>
+        <span class="text-xs text-gray-500 dark:text-gray-400">Page {{ page }} of {{ totalPages }}</span>
+        <button @click="page = Math.min(totalPages, page + 1)" :disabled="page === totalPages"
+          class="px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">
+          Next →
+        </button>
+      </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div v-if="editingBook" class="fixed inset-0 z-50 flex items-center justify-center" @click.self="editingBook = null">
+      <div class="absolute inset-0 bg-black/30" @click="editingBook = null"></div>
+      <div class="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Edit Audiobook</h2>
+        </div>
+        <form @submit.prevent="handleEdit" class="px-6 py-5 space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Book Name</label>
+            <input v-model="editForm.bookName" type="text" required
+              class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Reader</label>
+            <input v-model="editForm.reader" type="text" required
+              class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+          </div>
+          <div class="flex justify-end gap-3 pt-2">
+            <button type="button" @click="editingBook = null"
+              class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Cancel</button>
+            <button type="submit"
+              class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium">Save</button>
+          </div>
+        </form>
       </div>
     </div>
 
@@ -176,6 +219,16 @@ const showCreate = ref(false);
 const submitting = ref(false);
 const uploading = ref<string | null>(null);
 const createForm = ref({ bookName: '', reader: '', chaptersText: '' });
+const editingBook = ref<Audiobook | null>(null);
+const editForm = ref({ bookName: '', reader: '' });
+const page = ref(1);
+const pageSize = 5;
+
+const totalPages = computed(() => Math.ceil(audiobooks.value.length / pageSize));
+const paginatedBooks = computed(() => {
+  const start = (page.value - 1) * pageSize;
+  return audiobooks.value.slice(start, start + pageSize);
+});
 
 function completedCount(book: Audiobook) {
   return book.chapters.filter(c => c.done).length;
@@ -250,6 +303,37 @@ async function approveBook(bookId: string) {
     toast.success('Audiobook approved!');
   } catch (e: any) {
     toast.error('Failed to approve');
+  }
+}
+
+function openEdit(book: Audiobook) {
+  editingBook.value = book;
+  editForm.value = { bookName: book.bookName, reader: book.reader };
+}
+
+async function handleEdit() {
+  if (!editingBook.value) return;
+  try {
+    await api.patch(`/evangelism/audiobooks/${editingBook.value.id}`, {
+      bookName: editForm.value.bookName,
+      reader: editForm.value.reader,
+    });
+    toast.success('Book updated');
+    editingBook.value = null;
+    await fetchData();
+  } catch (e: any) {
+    toast.error('Failed to update');
+  }
+}
+
+async function deleteBook(id: string) {
+  if (!confirm('Delete this audiobook? This cannot be undone.')) return;
+  try {
+    await api.delete(`/evangelism/audiobooks/${id}`);
+    toast.success('Book deleted');
+    await fetchData();
+  } catch (e: any) {
+    toast.error('Failed to delete');
   }
 }
 
