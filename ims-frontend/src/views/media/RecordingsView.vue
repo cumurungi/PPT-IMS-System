@@ -38,10 +38,6 @@
       >
         <option value="">All Status</option>
         <option value="CAPTURED">Captured</option>
-        <option value="IN_EDITING">In Editing</option>
-        <option value="EDITED">Edited</option>
-        <option value="APPROVED">Approved</option>
-        <option value="PUBLISHED">Published</option>
       </select>
       <!-- Managers can toggle between all recordings and their own -->
       <button v-if="auth.isManager" @click="showMineOnly = !showMineOnly; refresh()"

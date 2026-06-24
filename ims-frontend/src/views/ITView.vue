@@ -24,7 +24,7 @@
 
     <div class="flex-1 overflow-hidden">
       <!-- Non-IT users: only see the submit form -->
-      <div v-if="!isIT" class="h-full flex flex-col">>
+      <div v-if="!isIT" class="h-full flex flex-col">
         <div class="max-w-lg mx-auto w-full">
           <!-- Success message -->
           <div v-if="ticketSent" class="bg-green-50 dark:bg-green-900/20 rounded-xl p-6 text-center">
@@ -33,7 +33,7 @@
             <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
               Your support request has been sent to the IT team. They will get back to you.
             </p>
-            <button @click="ticketSent = false"
+            <button @click="ticketSent = false; fetchMyTickets()"
               class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
               Submit Another Ticket
             </button>
@@ -86,6 +86,23 @@
               </button>
             </form>
           </div>
+
+          <!-- My Tickets History -->
+          <div v-if="myTickets.length > 0" class="mt-6 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+            <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">My Tickets</h3>
+            <div class="space-y-2">
+              <div v-for="t in myTickets" :key="t.id"
+                class="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm text-gray-900 dark:text-gray-100 truncate">{{ t.title }}</p>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">{{ t.category }} · {{ timeAgo(t.createdAt) }}</p>
+                </div>
+                <span :class="['text-xs font-medium px-2 py-0.5 rounded-full', ticketStatusClass(t.status)]">
+                  {{ t.status.replace('_', ' ') }}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -129,6 +146,7 @@ const form = ref({ title: '', description: '', priority: 'MEDIUM', category: 'SO
 const formError = ref('');
 const submitting = ref(false);
 const ticketSent = ref(false);
+const myTickets = ref<any[]>([]);
 
 async function submitTicket() {
   formError.value = '';
@@ -137,10 +155,41 @@ async function submitTicket() {
     await api.post('/it/tickets', form.value);
     form.value = { title: '', description: '', priority: 'MEDIUM', category: 'SOFTWARE' };
     ticketSent.value = true;
+    await fetchMyTickets();
   } catch (e: any) {
     formError.value = e.response?.data?.message || 'Failed to submit ticket';
   } finally {
     submitting.value = false;
   }
 }
+
+async function fetchMyTickets() {
+  try {
+    const { data } = await api.get('/it/tickets/mine');
+    myTickets.value = data;
+  } catch {}
+}
+
+function ticketStatusClass(status: string) {
+  const map: Record<string, string> = {
+    OPEN: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
+    IN_PROGRESS: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+    WAITING: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
+    RESOLVED: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+    CLOSED: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+  };
+  return map[status] || 'bg-gray-100 text-gray-700';
+}
+
+function timeAgo(date: string) {
+  const s = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
+// Load my tickets on mount for non-IT users
+import { onMounted } from 'vue';
+onMounted(() => { if (!isIT.value) fetchMyTickets(); });
 </script>

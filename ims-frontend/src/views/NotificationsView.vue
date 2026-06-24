@@ -74,7 +74,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import api from '@/api/axios';
+
+const router = useRouter();
 
 const notifications = ref<any[]>([]);
 const loading = ref(true);
@@ -109,11 +112,25 @@ function timeAgo(date: string) {
 }
 
 async function markRead(n: any) {
-  if (n.isRead) return;
-  try {
-    await api.patch(`/notifications/${n.id}/read`);
-    n.isRead = true;
-  } catch (err) { console.error(err); }
+  if (!n.isRead) {
+    try {
+      await api.patch(`/notifications/${n.id}/read`);
+      n.isRead = true;
+    } catch (err) { console.error(err); }
+  }
+  // Navigate to related entity
+  if (n.entityType && n.entityId) {
+    const routeMap: Record<string, string> = {
+      Task: '/tasks',
+      Recording: '/media',
+      MediaRequest: '/media',
+      Event: '/evangelism',
+      SupportTicket: '/it',
+      User: '/admin/users',
+    };
+    const target = routeMap[n.entityType];
+    if (target) router.push(target);
+  }
 }
 
 async function markAllRead() {

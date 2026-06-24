@@ -6,6 +6,19 @@ import { requireDepartment } from '../middleware/rbac';
 const router = Router();
 router.use(authenticate);
 
+// GET /api/v1/it/tickets/mine — user's own submitted tickets
+router.get('/tickets/mine', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tickets = await prisma.supportTicket.findMany({
+      where: { createdById: req.user!.id },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, title: true, status: true, priority: true, category: true, createdAt: true },
+      take: 10,
+    });
+    res.json(tickets);
+  } catch (err) { next(err); }
+});
+
 router.get('/tickets', async (req: Request, res: Response, next: NextFunction) => {
   try {
     let where: any = {};

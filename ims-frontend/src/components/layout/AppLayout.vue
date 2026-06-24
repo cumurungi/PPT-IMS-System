@@ -118,7 +118,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { RouterView, RouterLink, useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth.store';
 import { useThemeStore } from '@/stores/theme.store';
@@ -158,8 +158,15 @@ async function fetchUnreadMessages() {
 onMounted(() => {
   fetchUnreadCount();
   fetchUnreadMessages();
-  setInterval(fetchUnreadCount, 30000);
-  setInterval(fetchUnreadMessages, 30000);
+  notifInterval = setInterval(fetchUnreadCount, 30000);
+  msgInterval = setInterval(fetchUnreadMessages, 30000);
+});
+
+let notifInterval: any;
+let msgInterval: any;
+onUnmounted(() => {
+  clearInterval(notifInterval);
+  clearInterval(msgInterval);
 });
 
 function handleLogout() {
@@ -244,11 +251,12 @@ const currentPageTitle = computed(() => {
     '/tasks':             'Tasks',
     '/projects':          'Projects',
     '/notifications':     'Notifications',
+    '/messages':          'Messages',
     '/reports':           'Reports',
     '/media':             'Media Department',
     '/evangelism':        'Evangelism Department',
     '/hr':                'HR / Finance Department',
-    '/it':                'IT Department',
+    '/it':                'IT Support',
     '/admin/users':       'User Management',
     '/admin/audit-logs':  'Audit Logs',
     '/profile':           'My Profile',
