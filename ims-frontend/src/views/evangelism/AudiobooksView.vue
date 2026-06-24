@@ -52,12 +52,18 @@
         </div>
 
         <!-- Progress bar -->
-        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-4">
+        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-3">
           <div class="bg-indigo-500 h-2 rounded-full transition-all" :style="{ width: (completedCount(book) / Math.max(book.chapters.length, 1) * 100) + '%' }"></div>
         </div>
 
-        <!-- Chapters list -->
-        <div class="space-y-1.5">
+        <!-- See Chapters toggle button -->
+        <button @click="toggleExpand(book.id)"
+          class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-medium mb-3">
+          {{ expandedBooks.has(book.id) ? '▼ Hide Chapters' : '▶ See Chapters' }} ({{ book.chapters.length }})
+        </button>
+
+        <!-- Chapters list (collapsible) -->
+        <div v-if="expandedBooks.has(book.id)" class="space-y-1.5 mt-2">
           <div v-for="(ch, idx) in book.chapters" :key="idx"
             class="flex items-center justify-between py-1.5 px-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-750">
             <div class="flex items-center gap-3">
@@ -76,7 +82,7 @@
         </div>
 
         <!-- Upload ZIP + Approve (when all chapters done) -->
-        <div v-if="completedCount(book) === book.chapters.length && book.chapters.length > 0" class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+        <div v-if="expandedBooks.has(book.id) && completedCount(book) === book.chapters.length && book.chapters.length > 0" class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
           <div v-if="!book.approved" class="space-y-3">
             <!-- Upload ZIP -->
             <div v-if="!book.fileUrl">
@@ -228,8 +234,19 @@ const uploading = ref<string | null>(null);
 const createForm = ref({ bookName: '', reader: '', chaptersText: '' });
 const editingBook = ref<Audiobook | null>(null);
 const editForm = ref({ bookName: '', reader: '', chaptersText: '' });
+const expandedBooks = ref<Set<string>>(new Set());
 const page = ref(1);
 const pageSize = 5;
+
+function toggleExpand(bookId: string) {
+  if (expandedBooks.value.has(bookId)) {
+    expandedBooks.value.delete(bookId);
+  } else {
+    expandedBooks.value.add(bookId);
+  }
+  // Force reactivity
+  expandedBooks.value = new Set(expandedBooks.value);
+}
 
 const totalPages = computed(() => Math.ceil(audiobooks.value.length / pageSize));
 const paginatedBooks = computed(() => {
