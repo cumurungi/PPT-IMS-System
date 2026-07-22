@@ -244,6 +244,7 @@ const props = defineProps<{ recordingId: string }>();
 const emit = defineEmits(['close', 'updated']);
 
 const auth = useAuthStore();
+const apiBase = import.meta.env.VITE_API_BASE_URL || '';
 const rec = ref<any>(null);
 const loading = ref(true);
 const acting = ref(false);
@@ -337,7 +338,7 @@ async function handleVideoUpload(event: Event) {
   formData.append('file', input.files[0]);
   try {
     const { data } = await api.post('/upload/media-asset', formData);
-        editedVideoUrl.value = (import.meta.env.VITE_API_BASE_URL || '') + data.fileUrl;
+        editedVideoUrl.value = apiBase + data.fileUrl;
   } catch (err) { console.error(err); }
   finally { videoUploading.value = false; input.value = ''; }
 }

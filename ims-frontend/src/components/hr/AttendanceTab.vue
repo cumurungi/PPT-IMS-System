@@ -51,7 +51,7 @@
             </div>
           </div>
           <div class="flex items-center gap-2 flex-shrink-0">
-            <a :href="(import.meta.env.VITE_API_BASE_URL || '') + f.fileUrl" download
+            <a :href="apiBase + f.fileUrl" download
               class="px-3 py-1.5 text-xs bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/40 font-medium">
               ⬇️ Download
             </a>
@@ -72,6 +72,7 @@ import DateFilter from '@/components/shared/DateFilter.vue';
 import { usePagination } from '@/composables/usePagination';
 
 const auth = useAuthStore();
+const apiBase = import.meta.env.VITE_API_BASE_URL || '';
 const canUpload = computed(() => auth.user?.email === 'cumurungi9@gmail.com');
 
 const loading = ref(true);
