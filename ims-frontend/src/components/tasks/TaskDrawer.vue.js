@@ -1,10 +1,15 @@
 import { ref, computed, onMounted } from 'vue';
 import api from '@/api/axios';
+import { useAuthStore } from '@/stores/auth.store';
 import StatusBadge from './StatusBadge.vue';
 const props = defineProps();
 const emit = defineEmits(['close', 'updated']);
+const auth = useAuthStore();
 const comments = ref([]);
 const newComment = ref('');
+const acting = ref(false);
+const showDenyForm = ref(false);
+const denyReason = ref('');
 const statuses = [
     { value: 'TODO', label: 'To Do' },
     { value: 'IN_PROGRESS', label: 'In Progress' },
@@ -20,6 +25,34 @@ onMounted(async () => {
     }
     catch { }
 });
+async function acceptTask() {
+    acting.value = true;
+    try {
+        await api.post(`/tasks/${props.task.id}/accept`);
+        emit('updated');
+    }
+    catch (err) {
+        console.error(err);
+    }
+    finally {
+        acting.value = false;
+    }
+}
+async function denyTask() {
+    acting.value = true;
+    try {
+        await api.post(`/tasks/${props.task.id}/deny`, { reason: denyReason.value });
+        showDenyForm.value = false;
+        denyReason.value = '';
+        emit('updated');
+    }
+    catch (err) {
+        console.error(err);
+    }
+    finally {
+        acting.value = false;
+    }
+}
 async function changeStatus(status) {
     if (status === props.task.status)
         return;
@@ -139,6 +172,66 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)(
     ...{ class: "text-sm text-gray-700 dark:text-gray-300 mt-1" },
 });
 (__VLS_ctx.task.project?.department);
+if (__VLS_ctx.task.status === 'TODO' && (__VLS_ctx.task.assigneeId === __VLS_ctx.auth.user?.id || (__VLS_ctx.auth.isManager && __VLS_ctx.task.createdById !== __VLS_ctx.auth.user?.id))) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        ...{ class: "text-sm text-gray-700 dark:text-gray-300 mb-3" },
+    });
+    (__VLS_ctx.task.assigneeId === __VLS_ctx.auth.user?.id ? 'This task has been assigned to you. Do you accept it?' : 'This task was created by an employee and needs your review.');
+    if (!__VLS_ctx.showDenyForm) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "flex gap-2" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (__VLS_ctx.acceptTask) },
+            disabled: (__VLS_ctx.acting),
+            ...{ class: "flex-1 py-2 text-sm bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg font-medium" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (...[$event]) => {
+                    if (!(__VLS_ctx.task.status === 'TODO' && (__VLS_ctx.task.assigneeId === __VLS_ctx.auth.user?.id || (__VLS_ctx.auth.isManager && __VLS_ctx.task.createdById !== __VLS_ctx.auth.user?.id))))
+                        return;
+                    if (!(!__VLS_ctx.showDenyForm))
+                        return;
+                    __VLS_ctx.showDenyForm = true;
+                } },
+            disabled: (__VLS_ctx.acting),
+            ...{ class: "flex-1 py-2 text-sm bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg font-medium" },
+        });
+    }
+    else {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "space-y-2" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.textarea, __VLS_intrinsicElements.textarea)({
+            value: (__VLS_ctx.denyReason),
+            rows: "2",
+            placeholder: "Reason for denying (required)...",
+            ...{ class: "w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm resize-none focus:ring-2 focus:ring-indigo-500 outline-none" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "flex gap-2" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (__VLS_ctx.denyTask) },
+            disabled: (__VLS_ctx.acting || !__VLS_ctx.denyReason.trim()),
+            ...{ class: "flex-1 py-2 text-sm bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg font-medium" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+            ...{ onClick: (...[$event]) => {
+                    if (!(__VLS_ctx.task.status === 'TODO' && (__VLS_ctx.task.assigneeId === __VLS_ctx.auth.user?.id || (__VLS_ctx.auth.isManager && __VLS_ctx.task.createdById !== __VLS_ctx.auth.user?.id))))
+                        return;
+                    if (!!(!__VLS_ctx.showDenyForm))
+                        return;
+                    __VLS_ctx.showDenyForm = false;
+                    __VLS_ctx.denyReason = '';
+                } },
+            ...{ class: "px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-400" },
+        });
+    }
+}
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
 __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({
     ...{ class: "text-xs text-gray-500 dark:text-gray-400 uppercase font-medium" },
@@ -309,6 +402,69 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElement
 /** @type {__VLS_StyleScopedClasses['text-gray-700']} */ ;
 /** @type {__VLS_StyleScopedClasses['dark:text-gray-300']} */ ;
 /** @type {__VLS_StyleScopedClasses['mt-1']} */ ;
+/** @type {__VLS_StyleScopedClasses['bg-blue-50']} */ ;
+/** @type {__VLS_StyleScopedClasses['dark:bg-blue-900/20']} */ ;
+/** @type {__VLS_StyleScopedClasses['rounded-xl']} */ ;
+/** @type {__VLS_StyleScopedClasses['p-4']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-gray-700']} */ ;
+/** @type {__VLS_StyleScopedClasses['dark:text-gray-300']} */ ;
+/** @type {__VLS_StyleScopedClasses['mb-3']} */ ;
+/** @type {__VLS_StyleScopedClasses['flex']} */ ;
+/** @type {__VLS_StyleScopedClasses['gap-2']} */ ;
+/** @type {__VLS_StyleScopedClasses['flex-1']} */ ;
+/** @type {__VLS_StyleScopedClasses['py-2']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['bg-green-600']} */ ;
+/** @type {__VLS_StyleScopedClasses['hover:bg-green-700']} */ ;
+/** @type {__VLS_StyleScopedClasses['disabled:opacity-50']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-white']} */ ;
+/** @type {__VLS_StyleScopedClasses['rounded-lg']} */ ;
+/** @type {__VLS_StyleScopedClasses['font-medium']} */ ;
+/** @type {__VLS_StyleScopedClasses['flex-1']} */ ;
+/** @type {__VLS_StyleScopedClasses['py-2']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['bg-red-600']} */ ;
+/** @type {__VLS_StyleScopedClasses['hover:bg-red-700']} */ ;
+/** @type {__VLS_StyleScopedClasses['disabled:opacity-50']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-white']} */ ;
+/** @type {__VLS_StyleScopedClasses['rounded-lg']} */ ;
+/** @type {__VLS_StyleScopedClasses['font-medium']} */ ;
+/** @type {__VLS_StyleScopedClasses['space-y-2']} */ ;
+/** @type {__VLS_StyleScopedClasses['w-full']} */ ;
+/** @type {__VLS_StyleScopedClasses['border']} */ ;
+/** @type {__VLS_StyleScopedClasses['border-gray-200']} */ ;
+/** @type {__VLS_StyleScopedClasses['dark:border-gray-600']} */ ;
+/** @type {__VLS_StyleScopedClasses['dark:bg-gray-700']} */ ;
+/** @type {__VLS_StyleScopedClasses['dark:text-gray-100']} */ ;
+/** @type {__VLS_StyleScopedClasses['rounded-lg']} */ ;
+/** @type {__VLS_StyleScopedClasses['px-3']} */ ;
+/** @type {__VLS_StyleScopedClasses['py-2']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['resize-none']} */ ;
+/** @type {__VLS_StyleScopedClasses['focus:ring-2']} */ ;
+/** @type {__VLS_StyleScopedClasses['focus:ring-indigo-500']} */ ;
+/** @type {__VLS_StyleScopedClasses['outline-none']} */ ;
+/** @type {__VLS_StyleScopedClasses['flex']} */ ;
+/** @type {__VLS_StyleScopedClasses['gap-2']} */ ;
+/** @type {__VLS_StyleScopedClasses['flex-1']} */ ;
+/** @type {__VLS_StyleScopedClasses['py-2']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['bg-red-600']} */ ;
+/** @type {__VLS_StyleScopedClasses['hover:bg-red-700']} */ ;
+/** @type {__VLS_StyleScopedClasses['disabled:opacity-50']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-white']} */ ;
+/** @type {__VLS_StyleScopedClasses['rounded-lg']} */ ;
+/** @type {__VLS_StyleScopedClasses['font-medium']} */ ;
+/** @type {__VLS_StyleScopedClasses['px-3']} */ ;
+/** @type {__VLS_StyleScopedClasses['py-2']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['border']} */ ;
+/** @type {__VLS_StyleScopedClasses['border-gray-200']} */ ;
+/** @type {__VLS_StyleScopedClasses['dark:border-gray-600']} */ ;
+/** @type {__VLS_StyleScopedClasses['rounded-lg']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-gray-600']} */ ;
+/** @type {__VLS_StyleScopedClasses['dark:text-gray-400']} */ ;
 /** @type {__VLS_StyleScopedClasses['text-xs']} */ ;
 /** @type {__VLS_StyleScopedClasses['text-gray-500']} */ ;
 /** @type {__VLS_StyleScopedClasses['dark:text-gray-400']} */ ;
@@ -396,10 +552,16 @@ const __VLS_self = (await import('vue')).defineComponent({
     setup() {
         return {
             StatusBadge: StatusBadge,
+            auth: auth,
             comments: comments,
             newComment: newComment,
+            acting: acting,
+            showDenyForm: showDenyForm,
+            denyReason: denyReason,
             statuses: statuses,
             isOverdue: isOverdue,
+            acceptTask: acceptTask,
+            denyTask: denyTask,
             changeStatus: changeStatus,
             addComment: addComment,
             timeAgo: timeAgo,

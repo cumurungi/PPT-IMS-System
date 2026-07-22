@@ -360,6 +360,8 @@ model Recording {
   format               String
   status               RecordingStatus @default(CAPTURED)
   editingProgress      Int             @default(0)  // 0-100
+  editingDueDate       DateTime?
+  editingStatus        EditingStatus?
   editorId             String?
   editor               User?           @relation("RecordingEditor", fields: [editorId], references: [id])
   recordingAssigneeId  String?

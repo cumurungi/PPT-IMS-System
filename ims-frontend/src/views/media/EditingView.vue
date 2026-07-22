@@ -143,8 +143,8 @@ const RecordingCard = defineComponent({
       ]) : null,
       // Footer: editor + date
       h('div', { class: 'flex items-center justify-between mt-2 text-xs text-gray-500 dark:text-gray-400' }, [
-        h('span', {}, props.rec.editor?.name || 'No editor'),
-        h('span', {}, formatDate(props.rec.recordingDate)),
+          h('span', {}, props.rec.editor?.name || 'No editor'),
+          h('span', {}, props.rec.editingDueDate ? `Due ${formatDate(props.rec.editingDueDate)}` : formatDate(props.rec.recordingDate)),
       ]),
     ]);
   },
@@ -177,6 +177,7 @@ const filtered = computed(() => {
 });
 
 function openRecording(rec: any) {
+  if (!rec?.id) return;
   selectedRecording.value = rec;
 }
 
@@ -186,6 +187,18 @@ async function fetchData() {
   try {
     const { data } = await api.get('/media/recordings', { params: { stage: 'editing' } });
     recordings.value = data;
+    // Fetch editing tasks and attach matching deadlines to recordings
+    try {
+      const { data: tasks } = await api.get('/media/editing/tasks');
+      // For each recording, find a task with title starting with 'Edit: ' + recording.title
+      recordings.value = recordings.value.map((rec: any) => {
+        const match = tasks.find((t: any) => t.title && (t.title === `Edit: ${rec.title}` || t.title.includes(rec.title)));
+        // Prefer an explicit editing deadline set on the recording, else fall back to the task deadline
+        return { ...rec, editingDueDate: rec.editingDueDate || (match ? match.deadline : null) };
+      });
+    } catch (tErr) {
+      // ignore task fetch errors
+    }
   } catch (err) {
     console.error('Failed to load:', err);
   } finally {

@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue';
 import api from '@/api/axios';
 const emit = defineEmits(['close', 'created']);
-const form = ref({ title: '', description: '', projectId: '', assigneeId: '', deadline: '' });
+const form = ref({ title: '', description: '', projectId: '', assigneeId: '', deadline: '', priority: 'NORMAL' });
 const projects = ref([]);
 const users = ref([]);
 const error = ref('');
@@ -11,10 +11,10 @@ onMounted(async () => {
     try {
         const [projRes, usersRes] = await Promise.all([
             api.get('/projects'),
-            api.get('/users'),
+            api.get('/tasks/assignable-users'),
         ]);
         projects.value = projRes.data?.data || projRes.data;
-        users.value = usersRes.data?.data || usersRes.data;
+        users.value = usersRes.data;
     }
     catch { }
 });
@@ -23,8 +23,11 @@ async function handleCreate() {
     submitting.value = true;
     try {
         await api.post('/tasks', {
-            ...form.value,
+            title: form.value.title,
+            description: form.value.description,
+            assigneeId: form.value.assigneeId,
             deadline: new Date(form.value.deadline).toISOString(),
+            projectId: form.value.projectId || undefined,
         });
         emit('created');
     }
@@ -101,7 +104,6 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.select, __VLS_intrinsicElements.select)({
     value: (__VLS_ctx.form.projectId),
-    required: true,
     ...{ class: "w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
@@ -133,6 +135,9 @@ for (const [u] of __VLS_getVForSourceType((__VLS_ctx.users))) {
     });
     (u.name);
 }
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "grid grid-cols-2 gap-3" },
+});
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
 __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({
     ...{ class: "block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" },
@@ -143,6 +148,23 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
     ...{ class: "w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" },
 });
 (__VLS_ctx.form.deadline);
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({
+    ...{ class: "block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.select, __VLS_intrinsicElements.select)({
+    value: (__VLS_ctx.form.priority),
+    ...{ class: "w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
+    value: "NORMAL",
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
+    value: "HIGH",
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
+    value: "URGENT",
+});
 if (__VLS_ctx.error) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "text-sm text-red-600 dark:text-red-400" },
@@ -262,6 +284,28 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElement
 /** @type {__VLS_StyleScopedClasses['focus:ring-2']} */ ;
 /** @type {__VLS_StyleScopedClasses['focus:ring-indigo-500']} */ ;
 /** @type {__VLS_StyleScopedClasses['outline-none']} */ ;
+/** @type {__VLS_StyleScopedClasses['block']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['font-medium']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-gray-700']} */ ;
+/** @type {__VLS_StyleScopedClasses['dark:text-gray-300']} */ ;
+/** @type {__VLS_StyleScopedClasses['mb-1']} */ ;
+/** @type {__VLS_StyleScopedClasses['w-full']} */ ;
+/** @type {__VLS_StyleScopedClasses['border']} */ ;
+/** @type {__VLS_StyleScopedClasses['border-gray-200']} */ ;
+/** @type {__VLS_StyleScopedClasses['dark:border-gray-600']} */ ;
+/** @type {__VLS_StyleScopedClasses['dark:bg-gray-700']} */ ;
+/** @type {__VLS_StyleScopedClasses['dark:text-gray-100']} */ ;
+/** @type {__VLS_StyleScopedClasses['rounded-lg']} */ ;
+/** @type {__VLS_StyleScopedClasses['px-3']} */ ;
+/** @type {__VLS_StyleScopedClasses['py-2']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['focus:ring-2']} */ ;
+/** @type {__VLS_StyleScopedClasses['focus:ring-indigo-500']} */ ;
+/** @type {__VLS_StyleScopedClasses['outline-none']} */ ;
+/** @type {__VLS_StyleScopedClasses['grid']} */ ;
+/** @type {__VLS_StyleScopedClasses['grid-cols-2']} */ ;
+/** @type {__VLS_StyleScopedClasses['gap-3']} */ ;
 /** @type {__VLS_StyleScopedClasses['block']} */ ;
 /** @type {__VLS_StyleScopedClasses['text-sm']} */ ;
 /** @type {__VLS_StyleScopedClasses['font-medium']} */ ;

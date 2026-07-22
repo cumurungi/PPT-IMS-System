@@ -64,7 +64,7 @@ router.get('/sermons', evangOnly, async (req: Request, res: Response, next: Next
           select: { id: true, status: true, recordingType: true },
         },
         recordings: {
-          select: { id: true, title: true, status: true },
+          select: { id: true, title: true, status: true, editingProgress: true },
         },
         _count: { select: { recordings: true, mediaRequests: true } },
       },
@@ -152,6 +152,23 @@ router.post('/sermons', evangOnly, async (req: Request, res: Response, next: Nex
           html: `<div style="font-family:sans-serif;max-width:500px;"><h2 style="color:#4f46e5;">🎬 New Sermon to Record</h2><p>A new sermon has been scheduled:</p><div style="background:#f3f4f6;border-radius:8px;padding:16px;margin:16px 0;"><p style="margin:4px 0;"><strong>📖 Title:</strong> ${data.title}</p><p style="margin:4px 0;"><strong>📅 Date:</strong> ${data.scheduledDate.split('T')[0]}</p><p style="margin:4px 0;"><strong>👤 By:</strong> ${requester?.name}</p></div><p>Please log in to accept and assign a recorder.</p><p style="color:#6b7280;font-size:12px;">— IMS System</p></div>`,
         });
       }
+
+      // Notify the Evangelism Manager so they are aware a sermon was scheduled
+      const evangelismManager = await prisma.user.findFirst({
+        where: { department: 'EVANGELISM', role: 'MANAGER', isActive: true },
+        select: { id: true, email: true, name: true },
+      });
+      if (evangelismManager && evangelismManager.id !== req.user!.id) {
+        await prisma.notification.create({
+          data: { userId: evangelismManager.id, type: 'WORKFLOW_ALERT', title: 'New sermon scheduled', body: `${requester?.name} scheduled "${data.title}" for ${data.scheduledDate.split('T')[0]}`, entityType: 'Sermon', entityId: sermon.id },
+        }).catch(() => {});
+        sendEmail({
+          to: evangelismManager.email,
+          subject: `[IMS] 📖 New sermon scheduled: ${data.title}`,
+          text: `A new sermon has been scheduled:\n\nTitle: ${data.title}\nDate: ${data.scheduledDate}\nScheduled by: ${requester?.name}\n\nPlease log in to IMS to review.`,
+          html: `<div style="font-family:sans-serif;max-width:500px;"><h2 style="color:#4f46e5;">📖 New Sermon Scheduled</h2><p>A new sermon has been scheduled:</p><div style="background:#f3f4f6;border-radius:8px;padding:16px;margin:16px 0;"><p style="margin:4px 0;"><strong>📖 Title:</strong> ${data.title}</p><p style="margin:4px 0;"><strong>📅 Date:</strong> ${data.scheduledDate.split('T')[0]}</p><p style="margin:4px 0;"><strong>👤 By:</strong> ${requester?.name}</p></div><p>Please log in to review.</p><p style="color:#6b7280;font-size:12px;">— IMS System</p></div>`,
+        });
+      }
     } catch {}
 
     res.status(201).json({ ...mapToSermon(sermon), mediaRequestId: mediaRequest.id });
@@ -188,7 +205,7 @@ router.patch('/sermons/:id', evangOnly, async (req: Request, res: Response, next
       return;
     }
 
-    const { preacherIds, scheduledDate, series, ...rest } = data;
+    const { preacherIds, scheduledDate, series, scriptureReference, ...rest } = data;
 
     const updateData: any = { ...rest };
     if (scheduledDate) updateData.date = new Date(scheduledDate);

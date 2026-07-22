@@ -2,7 +2,7 @@
   <div class="h-full flex flex-col">
     <div class="mb-6">
       <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Evangelism Department</h1>
-      <p class="text-gray-500 dark:text-gray-400 mt-1">Sermons, audiobooks, preachers, and approvals</p>
+      <p class="text-gray-500 dark:text-gray-400 mt-1">Sermon workflow, audiobooks, preachers, and approvals</p>
     </div>
 
     <!-- Tabs -->

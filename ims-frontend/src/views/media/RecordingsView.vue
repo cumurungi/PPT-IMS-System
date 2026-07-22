@@ -189,6 +189,7 @@ function formatDate(date: string) {
 }
 
 function openRecording(rec: any) {
+  if (!rec?.id) return;
   selectedRecording.value = rec;
 }
 

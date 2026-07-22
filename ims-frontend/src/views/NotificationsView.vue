@@ -85,7 +85,7 @@ const acting = ref(false);
 const activeTab = ref<'all' | 'unread'>('all');
 const visibleCount = ref(20);
 
-const tabs = [
+const tabs: Array<{ value: 'all' | 'unread'; label: string }> = [
   { value: 'all', label: 'All' },
   { value: 'unread', label: 'Unread' },
 ];
@@ -122,8 +122,9 @@ async function markRead(n: any) {
   if (n.entityType && n.entityId) {
     const routeMap: Record<string, string> = {
       Task: '/tasks',
-      Recording: '/media',
-      MediaRequest: '/media',
+      Recording: '/media?tab=recordings',
+      MediaRequest: '/media?tab=requests',
+      Sermon: '/media?tab=requests',
       Event: '/evangelism',
       SupportTicket: '/it',
       User: '/admin/users',

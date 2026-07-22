@@ -200,22 +200,22 @@ interface NavLink {
   label: string;
   depts?: string[];   // if set, only these departments see it (+ admin)
   roles?: string[];   // if set, only these roles see it (+ admin)
+  section?: 'general' | 'department' | 'admin';
 }
 
 const allLinks: NavLink[] = [
   // ── Common (everyone)
-  { to: '/dashboard',     icon: '🏠', label: 'Dashboard' },
-  { to: '/tasks',         icon: '✅', label: 'Tasks' },
-  { to: '/projects',      icon: '📁', label: 'Projects' },
-  { to: '/notifications', icon: '🔔', label: 'Notifications' },
-  { to: '/messages',      icon: '💬', label: 'Messages' },
-  { to: '/reports',       icon: '📊', label: 'Reports' },
-  { to: '/it',            icon: '🎫', label: 'IT Support' },
+  { to: '/dashboard',     icon: '🏠', label: 'Dashboard', section: 'general' },
+  { to: '/projects',      icon: '📁', label: 'Projects', section: 'general' },
+  { to: '/notifications', icon: '🔔', label: 'Notifications', section: 'general' },
+  { to: '/messages',      icon: '💬', label: 'Messages', section: 'general' },
+  { to: '/reports',       icon: '📊', label: 'Reports', section: 'general' },
 
   // ── Department-specific
-  { to: '/media',         icon: '🎥', label: 'Media',        depts: ['MEDIA'] },
-  { to: '/evangelism',    icon: '📖', label: 'Evangelism',   depts: ['EVANGELISM'] },
-  { to: '/hr',            icon: '👥', label: 'HR / Finance' },
+  { to: '/it',            icon: '🎫', label: 'IT', section: 'department' },
+  { to: '/media',         icon: '🎥', label: 'Media',        depts: ['MEDIA'], section: 'department' },
+  { to: '/evangelism',    icon: '📖', label: 'Evangelism',   depts: ['EVANGELISM'], section: 'department' },
+  { to: '/hr',            icon: '👥', label: 'HR / Finance', section: 'department' },
 
   // ── Admin only
   { to: '/admin/users',      icon: '⚙️',  label: 'User Management', roles: ['ADMIN'] },
@@ -233,9 +233,9 @@ function canSee(link: NavLink): boolean {
 const navSections = computed(() => {
   const visible = allLinks.filter(canSee);
 
-  const common    = visible.filter(l => !l.depts && !l.roles);
-  const deptLinks = visible.filter(l => l.depts);
-  const adminLinks= visible.filter(l => l.roles);
+  const common    = visible.filter(l => l.section === 'general' || (!l.depts && !l.roles && !l.section));
+  const deptLinks = visible.filter(l => l.section === 'department' || l.depts);
+  const adminLinks= visible.filter(l => l.section === 'admin' || l.roles);
 
   const sections = [];
   if (common.length)     sections.push({ label: 'General',    links: common });

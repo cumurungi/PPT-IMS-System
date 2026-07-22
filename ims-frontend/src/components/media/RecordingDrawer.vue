@@ -12,6 +12,12 @@
         <div class="animate-spin rounded-full h-8 w-8 border-4 border-indigo-500 border-t-transparent"></div>
       </div>
 
+      <div v-else-if="notFound" class="px-6 py-10 text-center">
+        <p class="text-4xl mb-3">🎬</p>
+        <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">This recording could not be found.</p>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">It may have been removed or the link is no longer valid.</p>
+      </div>
+
       <div v-else-if="rec" class="px-6 py-5 space-y-6">
         <!-- Title + meta -->
         <div>
@@ -44,6 +50,11 @@
               <span v-if="rec.editor" class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ rec.editor.name }}</span>
               <span v-else class="text-sm text-gray-300 dark:text-gray-600 italic">Not assigned</span>
             </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-500 dark:text-gray-400 w-24">📆 Due:</span>
+              <span v-if="rec.editingDueDate" class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ formatDate(rec.editingDueDate) }}</span>
+              <span v-else class="text-sm text-gray-300 dark:text-gray-600 italic">No deadline</span>
+            </div>
           </div>
 
           <!-- Editable panel (manager only) -->
@@ -63,6 +74,11 @@
                 <option value="">— None —</option>
                 <option v-for="u in teamMembers" :key="u.id" :value="u.id">{{ u.name }}</option>
               </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Editing Deadline</label>
+              <input v-model="editingDueDate" type="date"
+                class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
             </div>
             <button @click="saveAssignments" :disabled="acting"
               class="w-full py-2 text-sm bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg font-medium">
@@ -231,6 +247,7 @@ const auth = useAuthStore();
 const rec = ref<any>(null);
 const loading = ref(true);
 const acting = ref(false);
+const notFound = ref(false);
 const localProgress = ref(0);
 const approvalNotes = ref('');
 const rejectionReason = ref('');
@@ -240,6 +257,7 @@ const approvalVideoSource = ref('');
 const showAssignPanel = ref(false);
 const assignRecorderId = ref('');
 const assignEditorId = ref('');
+const editingDueDate = ref('');
 const teamMembers = ref<any[]>([]);
 const selectedPreacherId = ref('');
 const evangelismUsers = ref<any[]>([]);
@@ -259,6 +277,13 @@ const workflowSteps = [
 onMounted(fetchRecording);
 
 async function fetchRecording() {
+  notFound.value = false;
+  if (!props.recordingId) {
+    notFound.value = true;
+    loading.value = false;
+    return;
+  }
+
   try {
     const [recRes, teamRes, evangRes] = await Promise.all([
       api.get(`/media/recordings/${props.recordingId}`),
@@ -271,10 +296,15 @@ async function fetchRecording() {
     approvalVideoSource.value = recRes.data.approvalVideoSource || '';
     assignRecorderId.value = recRes.data.recordingAssigneeId || '';
     assignEditorId.value = recRes.data.editorId || '';
+    editingDueDate.value = recRes.data.editingDueDate ? recRes.data.editingDueDate.slice(0, 10) : '';
     teamMembers.value = teamRes.data;
     evangelismUsers.value = evangRes.data;
-  } catch (err) {
-    console.error('Failed to load recording:', err);
+  } catch (err: any) {
+    if (err?.response?.status === 404) {
+      notFound.value = true;
+    } else {
+      console.error('Failed to load recording:', err);
+    }
   } finally {
     loading.value = false;
   }
@@ -318,6 +348,7 @@ async function saveAssignments() {
     await api.patch(`/media/recordings/${props.recordingId}`, {
       recordingAssigneeId: assignRecorderId.value || null,
       editorId: assignEditorId.value || null,
+      editingDueDate: editingDueDate.value ? new Date(editingDueDate.value + 'T23:59:59').toISOString() : null,
     });
     await fetchRecording();
     showAssignPanel.value = false;
@@ -385,5 +416,9 @@ function timeAgo(date: string) {
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
   return `${Math.floor(seconds / 86400)}d ago`;
+}
+
+function formatDate(date: string) {
+  return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 </script>

@@ -273,33 +273,12 @@ const upcomingTasks = ref<any[]>([]);
 
 onMounted(async () => {
   try {
-    const [dashRes, tasksRes] = await Promise.all([
+    const [dashRes, upcomingRes] = await Promise.all([
       api.get('/dashboard/stats'),
-      api.get('/tasks'),
+      api.get('/tasks/upcoming'),
     ]);
     stats.value = dashRes.data;
-
-    // Process upcoming tasks (due within 7 days or overdue)
-    const now = new Date();
-    const weekFromNow = new Date(now.getTime() + 7 * 86400000);
-    upcomingTasks.value = (tasksRes.data || [])
-      .filter((t: any) => t.status !== 'COMPLETED' && t.deadline)
-      .map((t: any) => {
-        const deadline = new Date(t.deadline);
-        const diffDays = Math.ceil((deadline.getTime() - now.getTime()) / 86400000);
-        return {
-          id: t.id,
-          title: t.title,
-          project: t.project?.name || '—',
-          isOverdue: diffDays < 0,
-          isToday: diffDays === 0,
-          dueLabel: diffDays < 0 ? `${Math.abs(diffDays)}d overdue` : diffDays === 0 ? 'Today' : diffDays === 1 ? 'Tomorrow' : `${diffDays}d left`,
-          deadline,
-        };
-      })
-      .filter((t: any) => t.isOverdue || t.deadline <= weekFromNow)
-      .sort((a: any, b: any) => a.deadline.getTime() - b.deadline.getTime())
-      .slice(0, 5);
+    upcomingTasks.value = upcomingRes.data || [];
   } catch (err) {
     console.error('Failed to load dashboard stats:', err);
   } finally {

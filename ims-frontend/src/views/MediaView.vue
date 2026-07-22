@@ -45,6 +45,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import api from '@/api/axios';
 import MediaLibraryView from './media/MediaLibraryView.vue';
 import RecordingsView from './media/RecordingsView.vue';
@@ -55,6 +56,7 @@ type TabId = 'library' | 'recordings' | 'requests' | 'editing';
 
 const activeTab = ref<TabId>('library');
 const pendingRequestsCount = ref(0);
+const route = useRoute();
 
 const mediaTabs: Array<{ id: TabId; label: string }> = [
   { id: 'library', label: 'Media Library' },
@@ -65,6 +67,9 @@ const mediaTabs: Array<{ id: TabId; label: string }> = [
 
 // Load pending count on mount so badge shows even before clicking the tab
 onMounted(async () => {
+  // Honour ?tab= query so notification links open the right sub-tab
+  const tab = route.query.tab as TabId | undefined;
+  if (tab && mediaTabs.some((t) => t.id === tab)) activeTab.value = tab;
   try {
     const { data } = await api.get('/media/requests');
     pendingRequestsCount.value = data.filter((r: any) => r.status === 'PENDING').length;

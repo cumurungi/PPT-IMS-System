@@ -106,6 +106,17 @@ router.get('/assignable-users', mediaOnly, async (_req: Request, res: Response, 
   } catch (err) { next(err); }
 });
 
+// GET /api/v1/media/events — list events (sermons) so a recording can be linked to one
+router.get('/events', mediaOnly, async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const events = await prisma.event.findMany({
+      orderBy: { date: 'desc' },
+      select: { id: true, title: true, date: true },
+    });
+    res.json(events);
+  } catch (err) { next(err); }
+});
+
 // GET /api/v1/media/evangelism-users — list evangelism dept users for preacher selection
 router.get('/evangelism-users', mediaOnly, async (_req: Request, res: Response, next: NextFunction) => {
   try {
@@ -188,6 +199,13 @@ router.patch('/recordings/:id', mediaOnly, async (req: Request, res: Response, n
     if (req.body.title) updates.title = req.body.title;
     if (req.body.format) updates.format = req.body.format;
 
+    // Editing deadline — kept on the recording and synced to the linked editing task
+    let editingDueDateChanged = false;
+    if (req.body.editingDueDate !== undefined) {
+      updates.editingDueDate = req.body.editingDueDate ? new Date(req.body.editingDueDate) : null;
+      editingDueDateChanged = true;
+    }
+
     const recording = await prisma.recording.update({
       where: { id: req.params.id },
       data: updates,
@@ -196,6 +214,20 @@ router.patch('/recordings/:id', mediaOnly, async (req: Request, res: Response, n
         recordingAssignee: { select: { id: true, name: true } },
       },
     });
+
+    // Keep the linked editing task deadline in sync so reports/editing view stay accurate
+    if (editingDueDateChanged) {
+      await prisma.editingTask.updateMany({
+        where: { title: `Edit: ${current.title}` },
+        data: { deadline: req.body.editingDueDate ? new Date(req.body.editingDueDate) : null },
+      }).catch(() => {});
+    }
+
+    // Notify the editor if one was (re)assigned
+    if (req.body.editorId && req.body.editorId !== current.editorId) {
+      await notifyEditorAssignment(current, req.body.editorId, req.user!.name);
+    }
+
     res.json(recording);
   } catch (err) { next(err); }
 });
@@ -225,6 +257,19 @@ router.post('/recordings/:id/start-editing', mediaOnly, async (req: Request, res
         recordingAssignee: { select: { id: true, name: true } },
       },
     });
+
+    // Keep the linked sermon (event) status in sync: once editing starts,
+    // the sermon is no longer just "planned" — reflect it as in progress.
+    if (current.eventId) {
+      try {
+        const linkedEvent = await prisma.event.findUnique({ where: { id: current.eventId }, select: { status: true } });
+        if (linkedEvent && (linkedEvent.status === 'PLANNED' || linkedEvent.status === 'CONFIRMED')) {
+          await prisma.event.update({ where: { id: current.eventId }, data: { status: 'IN_PROGRESS' } });
+        }
+      } catch (syncErr) {
+        console.error('[Sync sermon status] Failed:', syncErr);
+      }
+    }
 
     // Auto-create an editing task so it shows up on the Editing page
     try {
@@ -262,6 +307,9 @@ router.post('/recordings/:id/start-editing', mediaOnly, async (req: Request, res
     } catch (editingErr) {
       console.error('[Auto-editing-task] Failed:', editingErr);
     }
+
+    // Notify the assigned editor
+    await notifyEditorAssignment(current, editorId, req.user!.name);
 
     res.json(recording);
   } catch (err) { next(err); }
@@ -353,6 +401,19 @@ router.post('/recordings/:id/approve', async (req: Request, res: Response, next:
         },
       }),
     ]);
+
+    // Keep the linked sermon (event) status in sync with the recording approval
+    if (current.eventId) {
+      try {
+        const newEventStatus = decision ? 'COMPLETED' : 'IN_PROGRESS';
+        const linkedEvent = await prisma.event.findUnique({ where: { id: current.eventId }, select: { status: true } });
+        if (linkedEvent && linkedEvent.status !== newEventStatus) {
+          await prisma.event.update({ where: { id: current.eventId }, data: { status: newEventStatus } });
+        }
+      } catch (syncErr) {
+        console.error('[Sync sermon status] Failed:', syncErr);
+      }
+    }
 
     // If approved, auto-add to publishing queue and notify IT team
     if (decision) {
@@ -514,6 +575,17 @@ router.patch('/requests/:id', mediaOnly, async (req: Request, res: Response, nex
           },
         }).catch(() => {}); // ignore if recording already exists for this request
 
+        // Keep the linked sermon (event) status in sync: once Media accepts the
+        // assignment, the sermon is no longer merely "planned" — reflect it as in progress.
+        try {
+          const linkedEvent = await prisma.event.findUnique({ where: { id: event.id }, select: { status: true } });
+          if (linkedEvent && linkedEvent.status === 'PLANNED') {
+            await prisma.event.update({ where: { id: event.id }, data: { status: 'IN_PROGRESS' } });
+          }
+        } catch (syncErr) {
+          console.error('[Sync sermon status] Failed:', syncErr);
+        }
+
         // Email the assigned team member
         try {
           const { sendRecordingAssignedEmail } = require('../lib/email');
@@ -545,6 +617,35 @@ router.patch('/requests/:id', mediaOnly, async (req: Request, res: Response, nex
 function safeParseTags(tags: string | null): string[] {
   if (!tags) return [];
   try { return JSON.parse(tags); } catch { return []; }
+}
+
+// Notify an editor that a sermon (recording) has been assigned to them for editing
+async function notifyEditorAssignment(rec: { id: string; title: string }, editorId: string | null | undefined, byName: string) {
+  if (!editorId) return;
+  try {
+    const editor = await prisma.user.findUnique({
+      where: { id: editorId },
+      select: { id: true, email: true, name: true },
+    });
+    if (!editor) return;
+    const { sendEmail } = require('../lib/email');
+    await prisma.notification.create({
+      data: {
+        userId: editor.id,
+        type: 'TASK_ASSIGNED',
+        title: 'New sermon assigned for editing',
+        body: `${byName} assigned you to edit "${rec.title}".`,
+        entityType: 'Recording',
+        entityId: rec.id,
+      },
+    }).catch(() => {});
+    sendEmail({
+      to: editor.email,
+      subject: `[IMS] ✂️ Sermon assigned for editing: ${rec.title}`,
+      text: `You have been assigned to edit a sermon:\n\nTitle: ${rec.title}\nAssigned by: ${byName}\n\nPlease log in to IMS to start editing.`,
+      html: `<div style="font-family:sans-serif;max-width:500px;"><h2 style="color:#4f46e5;">✂️ Sermon Assigned for Editing</h2><p>You have been assigned to edit a sermon:</p><div style="background:#f3f4f6;border-radius:8px;padding:16px;margin:16px 0;"><p style="margin:4px 0;"><strong>🎬 Title:</strong> ${rec.title}</p><p style="margin:4px 0;"><strong>👤 Assigned by:</strong> ${byName}</p></div><p>Please log in to IMS to start editing.</p><p style="color:#6b7280;font-size:12px;">— IMS System</p></div>`,
+    });
+  } catch {}
 }
 
 export default router;

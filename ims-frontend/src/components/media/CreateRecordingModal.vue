@@ -98,7 +98,7 @@ const submitting = ref(false);
 onMounted(async () => {
   try {
     const [eventsRes, usersRes] = await Promise.all([
-      api.get('/evangelism/events'),
+      api.get('/media/events'),
       api.get('/media/assignable-users'),
     ]);
     events.value = eventsRes.data;

@@ -17,6 +17,13 @@ api.interceptors.response.use((res) => res, (err) => {
         localStorage.removeItem('ims_token');
         window.location.href = '/login';
     }
+    else if (err.response && err.response.status >= 400) {
+        import('@/composables/useToast').then(({ useToast }) => {
+            const toast = useToast();
+            const message = err.response.data?.message || err.response.data?.error || `Request failed (${err.response.status})`;
+            toast.error(message);
+        });
+    }
     return Promise.reject(err);
 });
 export default api;

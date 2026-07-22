@@ -4,8 +4,8 @@
     <div class="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
       <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
         <div>
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Schedule Sermon</h2>
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Media team will be notified automatically</p>
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Create Sermon Work Item</h2>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">This creates one sermon workflow item and notifies Media automatically.</p>
         </div>
         <button @click="$emit('close')" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">✕</button>
       </div>
@@ -36,10 +36,8 @@
           <select v-model="form.series" required
             class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
             <option value="">Select type</option>
-            <option value="Evangelistic Series">Evangelistic Series</option>
+            <option value="Series">Series</option>
             <option value="Single Sermon">Single Sermon</option>
-            <option value="Sabbath School">Sabbath School</option>
-            <option value="Bible Study">Bible Study</option>
           </select>
         </div>
 
@@ -87,7 +85,7 @@
             class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Cancel</button>
           <button type="submit" :disabled="submitting"
             class="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium">
-            {{ submitting ? 'Scheduling...' : 'Schedule Sermon' }}
+            {{ submitting ? 'Creating...' : 'Create Sermon' }}
           </button>
         </div>
       </form>

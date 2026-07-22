@@ -1,7 +1,7 @@
 <template>
   <div class="h-full flex flex-col">
     <div class="flex items-center justify-between mb-4 flex-shrink-0">
-      <div class="flex items-center gap-3 flex-wrap">
+    <div class="flex items-center gap-3 flex-wrap">
         <input v-model="search" type="text" placeholder="Search tickets..."
           class="border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm w-48 focus:ring-2 focus:ring-indigo-500 outline-none" />
         <select v-model="filterStatus"
@@ -16,7 +16,8 @@
         </select>
         <DateFilter v-model:month="filterMonth" v-model:year="filterYear" />
       </div>
-      <button @click="showCreate = true"
+      <button v-if="canCreate"
+        @click="showCreate = true"
         class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
         <span>+</span> New Ticket
       </button>
@@ -80,7 +81,7 @@
     </div>
 
     <!-- Create ticket modal -->
-    <div v-if="showCreate" class="fixed inset-0 z-50 flex items-center justify-center" @click.self="showCreate = false">
+    <div v-if="showCreate && canCreate" class="fixed inset-0 z-50 flex items-center justify-center" @click.self="showCreate = false">
       <div class="absolute inset-0 bg-black/30"></div>
       <div class="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
         <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
@@ -151,6 +152,15 @@ const submitting = ref(false);
 const formError = ref('');
 
 const isIT = computed(() => auth.user?.department === 'IT' || auth.user?.role === 'ADMIN');
+
+// Only allow creating tickets when user is not in IT (regular users submit tickets),
+// or when user is IT Manager or Admin.
+const canCreate = computed(() => {
+  if (!auth.user) return false;
+  if (auth.user.role === 'ADMIN') return true;
+  if (auth.user.department !== 'IT') return true; // regular users can submit tickets
+  return auth.user.role === 'MANAGER'; // IT managers can create
+});
 
 const statuses   = ['OPEN', 'IN_PROGRESS', 'WAITING', 'RESOLVED', 'CLOSED'];
 const priorities = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];

@@ -5,6 +5,17 @@ import { authenticate } from '../middleware/auth';
 const router = Router();
 router.use(authenticate);
 
+async function getPreacherIdsForUser(user: { name: string; email?: string | null }) {
+  const conditions: any[] = [{ name: user.name }];
+  if (user.email) conditions.push({ email: user.email });
+
+  const preachers = await prisma.preacher.findMany({
+    where: { OR: conditions },
+    select: { id: true },
+  });
+  return preachers.map((preacher) => preacher.id);
+}
+
 // GET /api/v1/reports/auto-weekly — auto-generated weekly report from system data
 router.get('/auto-weekly', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -40,21 +51,41 @@ router.get('/auto-weekly', async (req: Request, res: Response, next: NextFunctio
 
     const users = await prisma.user.findMany({
       where: { isActive: true, ...userFilter },
-      select: { id: true, name: true, department: true, role: true },
+      select: { id: true, name: true, email: true, department: true, role: true },
       orderBy: [{ department: 'asc' }, { name: 'asc' }],
     });
 
     // For each user, gather their weekly activity
     const reports = await Promise.all(users.map(async (u) => {
-      const [tasksCompleted, tasksInProgress, tasksCreated, ticketsHandled, totalCompleted] = await Promise.all([
-        prisma.task.count({ where: { assigneeId: u.id, status: 'COMPLETED', updatedAt: { gte: weekStart, lte: weekEnd } } }),
-        prisma.task.count({ where: { assigneeId: u.id, status: { in: ['IN_PROGRESS', 'IN_REVIEW'] } } }),
-        prisma.task.count({ where: { createdById: u.id, createdAt: { gte: weekStart, lte: weekEnd } } }),
-        prisma.supportTicket.count({ where: { assigneeId: u.id, updatedAt: { gte: weekStart, lte: weekEnd } } }),
-        prisma.task.count({ where: { assigneeId: u.id, status: 'COMPLETED' } }),
-      ]);
+      const isEvang = u.department === 'EVANGELISM';
+      const preacherIds = isEvang ? await getPreacherIdsForUser(u) : [];
 
-      // Recordings: any recording where user is editor or assignee that was touched this week
+      // For Evangelism we should not include task-related stats/details (they are reported via sermons/audiobooks)
+      let tasksCompleted = 0;
+      let tasksInProgress = 0;
+      let tasksCreated = 0;
+      let ticketsHandled = 0;
+      let totalCompleted = 0;
+
+      if (!isEvang) {
+        [tasksCompleted, tasksInProgress, tasksCreated, ticketsHandled, totalCompleted] = await Promise.all([
+          prisma.task.count({ where: { assigneeId: u.id, status: 'COMPLETED', updatedAt: { gte: weekStart, lte: weekEnd } } }),
+          prisma.task.count({ where: { assigneeId: u.id, status: { in: ['IN_PROGRESS', 'IN_REVIEW'] } } }),
+          prisma.task.count({ where: { createdById: u.id, createdAt: { gte: weekStart, lte: weekEnd } } }),
+          prisma.supportTicket.count({ where: { assigneeId: u.id, updatedAt: { gte: weekStart, lte: weekEnd } } }),
+          prisma.task.count({ where: { assigneeId: u.id, status: 'COMPLETED' } }),
+        ]);
+      }
+
+      const isMedia = u.department === 'MEDIA';
+
+      // Next week date range (used for next-week tasks and recordings)
+      const nextWeekStart = new Date(weekEnd);
+      nextWeekStart.setDate(nextWeekStart.getDate() + 1);
+      const nextWeekEnd = new Date(nextWeekStart);
+      nextWeekEnd.setDate(nextWeekStart.getDate() + 6);
+
+      // Recordings touched this week: editor or assignee, created or updated within the week
       const recordingsWorkedOn = await prisma.recording.findMany({
         where: {
           AND: [
@@ -62,19 +93,39 @@ router.get('/auto-weekly', async (req: Request, res: Response, next: NextFunctio
             { OR: [{ updatedAt: { gte: weekStart, lte: weekEnd } }, { createdAt: { gte: weekStart, lte: weekEnd } }] },
           ],
         },
-        select: { title: true, status: true },
+        select: { title: true, status: true, editingDueDate: true },
         take: 20,
       });
 
-      // Sermons scheduled this week
+      // Split worked-on recordings into "done" vs "in progress" based on workflow status
+      const DONE_STATUSES = ['EDITED', 'APPROVED', 'PUBLISHED'];
+      const recordingsDone = recordingsWorkedOn.filter((r) => DONE_STATUSES.includes(r.status));
+      const recordingsInProgress = recordingsWorkedOn.filter((r) => !DONE_STATUSES.includes(r.status));
+
+      // Recordings planned to be worked on next week (open edits with a due date in next week)
+      const nextWeekRecordings = isMedia ? await prisma.recording.findMany({
+        where: {
+          AND: [
+            { OR: [{ editorId: u.id }, { recordingAssigneeId: u.id }] },
+            { status: { in: ['CAPTURED', 'IN_EDITING'] } },
+            { editingDueDate: { gte: nextWeekStart, lte: nextWeekEnd } },
+          ],
+        },
+        select: { title: true, status: true, editingDueDate: true },
+        take: 15,
+      }) : [];
+
+      // Sermons scheduled this week (by event date, not creation date)
       const sermonsScheduled = await prisma.event.findMany({
-        where: { createdById: u.id, createdAt: { gte: weekStart, lte: weekEnd } },
+        where: isEvang
+          ? { preachers: { some: { preacherId: { in: preacherIds } } }, date: { gte: weekStart, lte: weekEnd } }
+          : { createdById: u.id, date: { gte: weekStart, lte: weekEnd } },
         select: { title: true, sourceTaskId: true },
         take: 20,
       });
 
       // Events auto-created from completed tasks this week
-      const eventsFromTasks = await prisma.event.findMany({
+      const eventsFromTasks = isEvang ? [] : await prisma.event.findMany({
         where: {
           sourceTaskId: { not: null },
           createdAt: { gte: weekStart, lte: weekEnd },
@@ -101,32 +152,32 @@ router.get('/auto-weekly', async (req: Request, res: Response, next: NextFunctio
       });
       const userPublished = publishedThisWeek;
 
-      // Get task titles completed this week
-      const completedTaskDetails = await prisma.task.findMany({
+      // Task-related details: skip for Evangelism
+      const completedTaskDetails = isEvang ? [] : await prisma.task.findMany({
         where: { assigneeId: u.id, status: 'COMPLETED', updatedAt: { gte: weekStart, lte: weekEnd } },
         select: { title: true, updatedAt: true },
         take: 10,
       });
 
       // If nothing completed this week, show recent completions for context
-      const recentCompleted = completedTaskDetails.length === 0
+      const recentCompleted = isEvang ? [] : (completedTaskDetails.length === 0
         ? await prisma.task.findMany({
             where: { assigneeId: u.id, status: 'COMPLETED' },
             select: { title: true, updatedAt: true },
             orderBy: { updatedAt: 'desc' },
             take: 5,
           })
-        : [];
+        : []);
 
       // Get task titles in progress
-      const inProgressTaskDetails = await prisma.task.findMany({
+      const inProgressTaskDetails = isEvang ? [] : await prisma.task.findMany({
         where: { assigneeId: u.id, status: { in: ['IN_PROGRESS', 'IN_REVIEW'] } },
         select: { title: true },
         take: 10,
       });
 
       // Tasks created/assigned to others this week (for managers/admin)
-      const tasksAssignedToOthers = await prisma.task.findMany({
+      const tasksAssignedToOthers = isEvang ? [] : await prisma.task.findMany({
         where: { createdById: u.id, assigneeId: { not: u.id }, createdAt: { gte: weekStart, lte: weekEnd } },
         select: { title: true, assignee: { select: { name: true } } },
         take: 10,
@@ -140,11 +191,7 @@ router.get('/auto-weekly', async (req: Request, res: Response, next: NextFunctio
       });
 
       // Next week tasks
-      const nextWeekStart = new Date(weekEnd);
-      nextWeekStart.setDate(nextWeekStart.getDate() + 1);
-      const nextWeekEnd = new Date(nextWeekStart);
-      nextWeekEnd.setDate(nextWeekStart.getDate() + 6);
-      const nextWeekTasks = await prisma.task.findMany({
+      const nextWeekTasks = isEvang ? [] : await prisma.task.findMany({
         where: {
           assigneeId: u.id,
           status: { not: 'COMPLETED' },
@@ -154,21 +201,37 @@ router.get('/auto-weekly', async (req: Request, res: Response, next: NextFunctio
         take: 15,
       });
 
-      // Events this week (sermons that happened / are happening this week)
+      // Events this week (sermons that happened / are happening this week) — done/recorded
       const eventsThisWeek = await prisma.event.findMany({
         where: {
           date: { gte: weekStart, lte: weekEnd },
+          preachers: { some: { preacherId: { in: preacherIds } } },
+          recordings: { some: { status: 'APPROVED' } },
+          status: { in: ['COMPLETED', 'CONFIRMED'] },
         },
         select: { title: true, date: true, status: true, eventType: true, sourceTask: { select: { title: true } } },
         orderBy: { date: 'asc' },
         take: 20,
       });
 
+      // Events in progress this week (sermons still being worked on)
+      const eventsInProgress = isEvang ? await prisma.event.findMany({
+        where: {
+          date: { gte: weekStart, lte: weekEnd },
+          status: { in: ['PLANNED', 'IN_PROGRESS'] },
+          preachers: { some: { preacherId: { in: preacherIds } } },
+        },
+        select: { title: true, date: true, status: true, eventType: true, sourceTask: { select: { title: true } } },
+        orderBy: { date: 'asc' },
+        take: 20,
+      }) : [];
+
       // Events next week (sermons planned for next week)
       const eventsNextWeek = await prisma.event.findMany({
         where: {
           date: { gte: nextWeekStart, lte: nextWeekEnd },
           status: { in: ['PLANNED', 'CONFIRMED', 'IN_PROGRESS'] },
+          preachers: { some: { preacherId: { in: preacherIds } } },
         },
         select: { title: true, date: true, status: true, eventType: true, sourceTask: { select: { title: true } } },
         orderBy: { date: 'asc' },
@@ -176,7 +239,7 @@ router.get('/auto-weekly', async (req: Request, res: Response, next: NextFunctio
       });
 
       return {
-        user: u,
+        user: { id: u.id, name: u.name, department: u.department, role: u.role },
         weekStart: weekStart.toISOString(),
         weekEnd: weekEnd.toISOString(),
         summary: {
@@ -185,23 +248,54 @@ router.get('/auto-weekly', async (req: Request, res: Response, next: NextFunctio
           tasksInProgress,
           tasksCreated,
           recordingsWorked: recordingsWorkedOn.length,
+          recordingsDone: recordingsDone.length,
+          recordingsInProgress: recordingsInProgress.length,
           sermonsScheduled: sermonsScheduled.length,
           eventsFromTasks: eventsFromTasks.length,
           eventsThisWeek: eventsThisWeek.length,
+          eventsInProgress: eventsInProgress.length,
           eventsNextWeek: eventsNextWeek.length,
           ticketsHandled,
           published: userPublished.length,
           approvalsDone: approvalsDone.length,
+          // Unified Done / In Progress / Next Week counts for consistent UI
+          doneThisWeek: isMedia
+            ? recordingsDone.length
+            : isEvang
+              ? eventsThisWeek.length + approvalsDone.length
+              : tasksCompleted + userPublished.length,
+          inProgress: isMedia
+            ? recordingsInProgress.length
+            : isEvang
+              ? eventsInProgress.length
+              : tasksInProgress + ticketDetails.length,
+          nextWeekCount: isMedia
+            ? nextWeekRecordings.length
+            : isEvang
+              ? eventsNextWeek.length
+              : nextWeekTasks.length,
         },
         details: {
           completedTasks: completedTaskDetails.map(t => t.title),
           recentCompleted: recentCompleted.map(t => `${t.title} (${new Date(t.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })})`),
           inProgressTasks: inProgressTaskDetails.map(t => t.title),
           tasksAssigned: tasksAssignedToOthers.map(t => `${t.title} → ${t.assignee?.name}`),
-          recordings: recordingsWorkedOn.map(r => `${r.title} (${r.status.replace('_', ' ')})`),
+          recordingsDone: recordingsDone.map(r => `${r.title} (${r.status.replace('_', ' ')})`),
+          recordingsInProgress: recordingsInProgress.map(r => `${r.title} (${r.status.replace('_', ' ')})`),
+          nextWeekRecordings: nextWeekRecordings.map(r => {
+            const due = r.editingDueDate ? new Date(r.editingDueDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+            return `${r.title}${due ? ` (due ${due})` : ''}`;
+          }),
           sermons: sermonsScheduled.map(s => s.title),
           eventsFromTasks: eventsFromTasks.map(e => `${e.title} ← Task: "${e.sourceTask?.title}" (${e.status})`),
           eventsThisWeek: eventsThisWeek.map(e => ({
+            title: e.title,
+            date: e.date,
+            status: e.status,
+            type: e.eventType,
+            fromTask: e.sourceTask?.title || null,
+          })),
+          eventsInProgress: eventsInProgress.map(e => ({
             title: e.title,
             date: e.date,
             status: e.status,
