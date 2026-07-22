@@ -337,7 +337,7 @@ async function handleVideoUpload(event: Event) {
   formData.append('file', input.files[0]);
   try {
     const { data } = await api.post('/upload/media-asset', formData);
-    editedVideoUrl.value = 'http://localhost:3001' + data.fileUrl;
+        editedVideoUrl.value = (import.meta.env.VITE_API_BASE_URL || '') + data.fileUrl;
   } catch (err) { console.error(err); }
   finally { videoUploading.value = false; input.value = ''; }
 }
