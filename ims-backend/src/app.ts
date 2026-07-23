@@ -23,7 +23,7 @@ app.use(cors({
       'https://ppt-ims-system.vercel.app',
       'https://ppt-ims-systems.vercel.app',
     ];
-    const checkOrigin = (url: string | undefined) => !url || allowed.includes(url.replace(/\/$/, ''));
+    const checkOrigin = (url: string | undefined) => !url || allowed.includes(url ? url.replace(/\/$/, '') : url);
     if (checkOrigin(origin)) return callback(null, true);
     return callback(new Error('Not allowed by CORS'));
   },
