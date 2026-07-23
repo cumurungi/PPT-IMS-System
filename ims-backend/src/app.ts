@@ -14,15 +14,16 @@ const app = express();
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({
   origin: (origin, callback) => {
+    const normalize = (url: string | undefined) => url?.replace(/\/$/, '');
     const allowed = [
       'http://localhost:5173',
       'http://localhost:5174',
       'http://localhost:5175',
-      process.env.CLIENT_URL,
+      normalize(process.env.CLIENT_URL),
       'https://ppt-ims-system.vercel.app',
       'https://ppt-ims-systems.vercel.app',
-    ].filter(Boolean);
-    if (!origin || allowed.includes(origin)) return callback(null, true);
+    ].filter(Boolean) as string[];
+    if (!origin || allowed.includes(normalize(origin))) return callback(null, true);
     return callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
