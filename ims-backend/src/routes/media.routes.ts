@@ -352,9 +352,11 @@ router.post('/recordings/:id/send-for-approval', mediaOnly, async (req: Request,
           subject: `[IMS] 🎬 Sermon ready for approval: ${current.title}`,
           text: `Your sermon "${current.title}" has been edited and is ready for your approval.\n\n${videoLink ? 'Watch here: ' + videoLink + '\n\n' : ''}Please log in to IMS to approve or request changes.`,
           html: `<div style="font-family:sans-serif;max-width:500px;"><h2 style="color:#4f46e5;">🎬 Sermon Ready for Approval</h2><p>Your sermon has been edited and needs your approval:</p><div style="background:#f3f4f6;border-radius:8px;padding:16px;margin:16px 0;"><p style="margin:4px 0;"><strong>📖 Title:</strong> ${current.title}</p>${videoLink ? '<p style="margin:4px 0;"><strong>🔗 Watch:</strong> <a href="' + videoLink + '">' + videoLink + '</a></p>' : ''}</div><p>Please log in to IMS to approve or request changes.</p><p style="color:#6b7280;font-size:12px;">— IMS System</p></div>`,
-        });
+        }).catch((err: any) => console.error('[Media] Failed to send approval email:', err));
       }
-    } catch {}
+    } catch (err) {
+      console.error('[Media] Failed to send approval email notification:', err);
+    }
 
     res.json({ message: 'Sent to preacher for approval' });
   } catch (err) { next(err); }
@@ -592,13 +594,21 @@ router.patch('/requests/:id', mediaOnly, async (req: Request, res: Response, nex
           if (data.assignedToId) {
             const assignee = await prisma.user.findUnique({ where: { id: data.assignedToId }, select: { id: true, email: true, name: true } });
             if (assignee) {
-              sendRecordingAssignedEmail(assignee.email, assignee.name, event.title);
+              sendRecordingAssignedEmail(assignee.email, assignee.name, event.title).then((sent: boolean) => {
+                if (!sent) console.warn('[Media] Email not sent to', assignee.email, 'for recording', event.title);
+              });
               await prisma.notification.create({
                 data: { userId: assignee.id, type: 'TASK_ASSIGNED', title: 'Recording assigned to you', body: `"${event.title}" — please record this sermon.`, entityType: 'Recording', entityId: mediaRequest.id },
               }).catch(() => {});
+            } else {
+              console.warn('[Media] Assignee not found for id:', data.assignedToId);
             }
+          } else {
+            console.warn('[Media] No assignedToId provided for media request', mediaRequest.id);
           }
-        } catch {}
+        } catch (err) {
+          console.error('[Media] Failed to send assignment email:', err);
+        }
 
         // Email the person who requested (from evangelism)
         try {
@@ -606,7 +616,9 @@ router.patch('/requests/:id', mediaOnly, async (req: Request, res: Response, nex
           const requester = await prisma.user.findUnique({ where: { id: mediaRequest.requestedBy?.id || '' }, select: { email: true, name: true } });
           const assignee = data.assignedToId ? await prisma.user.findUnique({ where: { id: data.assignedToId }, select: { name: true } }) : null;
           if (requester) sendMediaRequestAcceptedEmail(requester.email, requester.name, event.title, assignee?.name || 'Media team');
-        } catch {}
+        } catch (err: any) {
+          console.error('[Media] Failed to send requester notification email:', err);
+        }
       }
     }
 
@@ -644,8 +656,10 @@ async function notifyEditorAssignment(rec: { id: string; title: string }, editor
       subject: `[IMS] ✂️ Sermon assigned for editing: ${rec.title}`,
       text: `You have been assigned to edit a sermon:\n\nTitle: ${rec.title}\nAssigned by: ${byName}\n\nPlease log in to IMS to start editing.`,
       html: `<div style="font-family:sans-serif;max-width:500px;"><h2 style="color:#4f46e5;">✂️ Sermon Assigned for Editing</h2><p>You have been assigned to edit a sermon:</p><div style="background:#f3f4f6;border-radius:8px;padding:16px;margin:16px 0;"><p style="margin:4px 0;"><strong>🎬 Title:</strong> ${rec.title}</p><p style="margin:4px 0;"><strong>👤 Assigned by:</strong> ${byName}</p></div><p>Please log in to IMS to start editing.</p><p style="color:#6b7280;font-size:12px;">— IMS System</p></div>`,
-    });
-  } catch {}
+    }).catch((err: any) => console.error('[Media] Failed to send editor assignment email:', err));
+  } catch (err) {
+    console.error('[Media] Failed in notifyEditorAssignment:', err);
+  }
 }
 
 export default router;
