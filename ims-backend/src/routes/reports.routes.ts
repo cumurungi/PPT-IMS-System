@@ -97,13 +97,16 @@ router.get('/auto-weekly', async (req: Request, res: Response, next: NextFunctio
         take: 20,
       });
 
-      // Split worked-on recordings into "done" vs "in progress" based on workflow status
+      // Split worked-on recordings into "done" / "in progress" / "next week"
       const DONE_STATUSES = ['EDITED', 'APPROVED', 'PUBLISHED'];
+      const IN_PROGRESS_STATUSES = ['IN_EDITING'];
+      const NEXT_WEEK_STATUSES = ['CAPTURED'];
       const recordingsDone = recordingsWorkedOn.filter((r) => DONE_STATUSES.includes(r.status));
-      const recordingsInProgress = recordingsWorkedOn.filter((r) => !DONE_STATUSES.includes(r.status));
+      const recordingsInProgress = recordingsWorkedOn.filter((r) => IN_PROGRESS_STATUSES.includes(r.status));
+      const capturedThisWeek = recordingsWorkedOn.filter((r) => NEXT_WEEK_STATUSES.includes(r.status));
 
-      // Recordings planned to be worked on next week (open edits with a due date in next week)
-      const nextWeekRecordings = isMedia ? await prisma.recording.findMany({
+      // Recordings planned to be worked on next week (captured + open edits with due date in next week)
+      const nextWeekRecordingsQuery = isMedia ? await prisma.recording.findMany({
         where: {
           AND: [
             { OR: [{ editorId: u.id }, { recordingAssigneeId: u.id }] },
@@ -114,6 +117,7 @@ router.get('/auto-weekly', async (req: Request, res: Response, next: NextFunctio
         select: { title: true, status: true, editingDueDate: true },
         take: 15,
       }) : [];
+      const nextWeekRecordings = [...nextWeekRecordingsQuery, ...capturedThisWeek.filter(r => !nextWeekRecordingsQuery.find(q => q.title === r.title))];
 
       // Sermons scheduled this week (by event date, not creation date)
       const sermonsScheduled = await prisma.event.findMany({
