@@ -201,39 +201,38 @@ router.get('/auto-weekly', async (req: Request, res: Response, next: NextFunctio
         take: 15,
       });
 
-      // Events this week (sermons that happened / are happening this week) — done/recorded
+      // Events this week (sermons done/recorded this week — based on recording status)
       const eventsThisWeek = await prisma.event.findMany({
         where: {
           date: { gte: weekStart, lte: weekEnd },
           preachers: { some: { preacherId: { in: preacherIds } } },
-          recordings: { some: { status: 'APPROVED' } },
-          status: { in: ['COMPLETED', 'CONFIRMED'] },
+          recordings: { some: { status: { in: ['EDITED', 'APPROVED', 'PUBLISHED'] } } },
         },
-        select: { title: true, date: true, status: true, eventType: true, sourceTask: { select: { title: true } } },
+        select: { title: true, date: true, status: true, eventType: true, sourceTask: { select: { title: true } }, recordings: { select: { status: true } } },
         orderBy: { date: 'asc' },
         take: 20,
       });
 
-      // Events in progress this week (sermons still being worked on)
+      // Events in progress this week (sermons being edited — recording status IN_EDITING)
       const eventsInProgress = isEvang ? await prisma.event.findMany({
         where: {
           date: { gte: weekStart, lte: weekEnd },
-          status: { in: ['PLANNED', 'IN_PROGRESS'] },
           preachers: { some: { preacherId: { in: preacherIds } } },
+          recordings: { some: { status: 'IN_EDITING' } },
         },
-        select: { title: true, date: true, status: true, eventType: true, sourceTask: { select: { title: true } } },
+        select: { title: true, date: true, status: true, eventType: true, sourceTask: { select: { title: true } }, recordings: { select: { status: true } } },
         orderBy: { date: 'asc' },
         take: 20,
       }) : [];
 
-      // Events next week (sermons planned for next week)
+      // Events next week (sermons with captured recordings planned for next week)
       const eventsNextWeek = await prisma.event.findMany({
         where: {
           date: { gte: nextWeekStart, lte: nextWeekEnd },
-          status: { in: ['PLANNED', 'CONFIRMED', 'IN_PROGRESS'] },
           preachers: { some: { preacherId: { in: preacherIds } } },
+          recordings: { some: { status: 'CAPTURED' } },
         },
-        select: { title: true, date: true, status: true, eventType: true, sourceTask: { select: { title: true } } },
+        select: { title: true, date: true, status: true, eventType: true, sourceTask: { select: { title: true } }, recordings: { select: { status: true } } },
         orderBy: { date: 'asc' },
         take: 20,
       });
@@ -294,6 +293,7 @@ router.get('/auto-weekly', async (req: Request, res: Response, next: NextFunctio
             status: e.status,
             type: e.eventType,
             fromTask: e.sourceTask?.title || null,
+            recordings: e.recordings,
           })),
           eventsInProgress: eventsInProgress.map(e => ({
             title: e.title,
@@ -301,6 +301,7 @@ router.get('/auto-weekly', async (req: Request, res: Response, next: NextFunctio
             status: e.status,
             type: e.eventType,
             fromTask: e.sourceTask?.title || null,
+            recordings: e.recordings,
           })),
           eventsNextWeek: eventsNextWeek.map(e => ({
             title: e.title,
@@ -308,6 +309,7 @@ router.get('/auto-weekly', async (req: Request, res: Response, next: NextFunctio
             status: e.status,
             type: e.eventType,
             fromTask: e.sourceTask?.title || null,
+            recordings: e.recordings,
           })),
           approvals: approvalsDone.map(a => `${a.recording?.title} — ${a.decision ? 'Approved' : 'Rejected'}`),
           tickets: ticketDetails.map(t => `${t.title} — ${t.status}`),

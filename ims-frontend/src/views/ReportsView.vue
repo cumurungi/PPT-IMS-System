@@ -107,10 +107,9 @@
                   <p class="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">✅ Sermons Done / Recorded This Week:</p>
                   <ul class="text-xs text-gray-700 dark:text-gray-300 space-y-1">
                     <li v-for="e in r.details.eventsThisWeek" :key="e.title" class="flex items-center gap-2">
-                      <span :class="eventStatusDot(e.status)"></span>
                       <span class="font-medium">{{ e.title }}</span>
                       <span class="text-gray-400">· {{ formatEventDate(e.date) }}</span>
-                      <span class="text-xs px-1.5 py-0.5 rounded-full" :class="eventStatusBadge(e.status)">{{ e.status }}</span>
+                      <span class="text-xs px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">{{ e.recordings?.[0]?.status || 'DONE' }}</span>
                       <span v-if="e.fromTask" class="text-indigo-500 text-xs">← {{ e.fromTask }}</span>
                     </li>
                   </ul>
@@ -137,10 +136,9 @@
                   <p class="text-xs text-amber-600 dark:text-amber-400 font-medium mb-1">🔄 In Progress:</p>
                   <ul class="text-xs text-amber-700 dark:text-amber-300 space-y-1">
                     <li v-for="e in r.details.eventsInProgress" :key="e.title" class="flex items-center gap-2">
-                      <span :class="eventStatusDot(e.status)"></span>
                       <span class="font-medium">{{ e.title }}</span>
                       <span class="text-gray-400">· {{ formatEventDate(e.date) }}</span>
-                      <span class="text-xs px-1.5 py-0.5 rounded-full" :class="eventStatusBadge(e.status)">{{ e.status }}</span>
+                      <span class="text-xs px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">{{ e.recordings?.[0]?.status || 'IN_EDITING' }}</span>
                       <span v-if="e.fromTask" class="text-indigo-500 text-xs">← {{ e.fromTask }}</span>
                     </li>
                   </ul>
@@ -149,10 +147,9 @@
                   <p class="text-xs text-blue-600 dark:text-blue-400 font-medium mb-1">📆 Next Week — Sermons to Record:</p>
                   <ul class="text-xs text-gray-700 dark:text-gray-300 space-y-1">
                     <li v-for="e in r.details.eventsNextWeek" :key="e.title" class="flex items-center gap-2">
-                      <span :class="eventStatusDot(e.status)"></span>
                       <span class="font-medium">{{ e.title }}</span>
                       <span class="text-gray-400">· {{ formatEventDate(e.date) }}</span>
-                      <span class="text-xs px-1.5 py-0.5 rounded-full" :class="eventStatusBadge(e.status)">{{ e.status }}</span>
+                      <span class="text-xs px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">{{ e.recordings?.[0]?.status || 'CAPTURED' }}</span>
                       <span v-if="e.fromTask" class="text-indigo-500 text-xs">← {{ e.fromTask }}</span>
                     </li>
                   </ul>
