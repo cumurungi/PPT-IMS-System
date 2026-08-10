@@ -540,6 +540,20 @@ model PublishingQueuePlatform {
 
 // ─── Evangelism Department ────────────────────────────────────────────────────
 
+model Audiobook {
+  id           String   @id @default(cuid())
+  bookName     String
+  reader       String
+  chapters     String?  @db.Text // JSON array of {title, done}
+  fileUrl      String?
+  approved     Boolean  @default(false)
+  createdById  String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
 model Event {
   id                   String      @id @default(cuid())
   title                String
