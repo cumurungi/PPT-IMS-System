@@ -561,7 +561,7 @@ router.post('/audiobooks', evangOnly, async (req: Request, res: Response, next: 
     const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
     const chapters = JSON.stringify(data.chapters.map(title => ({ title, done: false })));
     await prisma.$executeRawUnsafe(
-      `INSERT INTO "Audiobook" (id, bookName, reader, chapters, fileUrl, approved, createdById, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, NULL, 0, $5, $6, $7)`,
+      `INSERT INTO "Audiobook" (id, "bookName", "reader", "chapters", "fileUrl", approved, createdById, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, NULL, 0, $5, $6, $7)`,
       id, data.bookName, data.reader, chapters, req.user!.id, now, now
     );
     const [audiobook] = await prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "Audiobook" WHERE id = $1`, id);
