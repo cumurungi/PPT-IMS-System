@@ -541,7 +541,7 @@ const createAudiobookSchema = z.object({
 router.get('/audiobooks', evangOnly, async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const rows = await prisma.$queryRawUnsafe<any[]>(
-      `SELECT * FROM "Audiobook" ORDER BY createdAt DESC`
+      `SELECT * FROM "Audiobook" ORDER BY "createdAt" DESC`
     );
     // Parse chapters JSON
     const result = rows.map(r => ({
@@ -561,7 +561,7 @@ router.post('/audiobooks', evangOnly, async (req: Request, res: Response, next: 
     const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
     const chapters = JSON.stringify(data.chapters.map(title => ({ title, done: false })));
     await prisma.$executeRawUnsafe(
-      `INSERT INTO "Audiobook" (id, bookName, reader, chapters, fileUrl, approved, createdById, createdAt, updatedAt) VALUES ($1, $2, $3, $4, NULL, 0, $5, $6, $7)`,
+      `INSERT INTO "Audiobook" (id, bookName, reader, chapters, fileUrl, approved, createdById, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, NULL, 0, $5, $6, $7)`,
       id, data.bookName, data.reader, chapters, req.user!.id, now, now
     );
     const [audiobook] = await prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "Audiobook" WHERE id = $1`, id);
@@ -576,16 +576,16 @@ router.patch('/audiobooks/:id', evangOnly, async (req: Request, res: Response, n
     const sets: string[] = [];
     const values: any[] = [];
 
-    if (fileUrl !== undefined) { sets.push('fileUrl = $' + (values.length + 1)); values.push(fileUrl); }
-    if (approved !== undefined) { sets.push('approved = $' + (values.length + 1)); values.push(approved ? 1 : 0); }
-    if (bookName !== undefined) { sets.push('bookName = $' + (values.length + 1)); values.push(bookName); }
-    if (reader !== undefined) { sets.push('reader = $' + (values.length + 1)); values.push(reader); }
-    if (chapters !== undefined) { sets.push('chapters = $' + (values.length + 1)); values.push(JSON.stringify(chapters)); }
+    if (fileUrl !== undefined) { sets.push('"fileUrl" = $' + (values.length + 1)); values.push(fileUrl); }
+    if (approved !== undefined) { sets.push('"approved" = $' + (values.length + 1)); values.push(approved ? 1 : 0); }
+    if (bookName !== undefined) { sets.push('"bookName" = $' + (values.length + 1)); values.push(bookName); }
+    if (reader !== undefined) { sets.push('"reader" = $' + (values.length + 1)); values.push(reader); }
+    if (chapters !== undefined) { sets.push('"chapters" = $' + (values.length + 1)); values.push(JSON.stringify(chapters)); }
 
     if (sets.length === 0) { res.status(400).json({ error: 'Nothing to update' }); return; }
 
     const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
-    sets.push('updatedAt = $' + (values.length + 1));
+    sets.push('"updatedAt" = $' + (values.length + 1));
     values.push(now);
     values.push(req.params.id);
 
@@ -610,7 +610,7 @@ router.patch('/audiobooks/:id/chapters/:index', evangOnly, async (req: Request, 
     chapters[idx].done = !!done;
     const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
     await prisma.$executeRawUnsafe(
-      `UPDATE "Audiobook" SET chapters = $1, updatedAt = $2 WHERE id = $3`,
+      `UPDATE "Audiobook" SET chapters = $1, "updatedAt" = $2 WHERE id = $3`,
       JSON.stringify(chapters), now, req.params.id
     );
     res.json({ chapters });
