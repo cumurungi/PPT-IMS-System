@@ -46,7 +46,7 @@
         </div>
 
         <p class="mt-10 text-xs text-indigo-300 italic">"But the God of all grace, who hath called us unto his eternal glory by Christ Jesus, after that ye have suffered a while, make you perfect, stablish, strengthen, settle you." — 1 Peter 5:10 KJV</p>
-        <!-- v2 -->
+        <!-- v3 -->
       </div>
     </div>
 
