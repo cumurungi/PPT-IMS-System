@@ -12,23 +12,22 @@ const app = express();
 
 // Security
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+// CORS — allow all origins in production for internal company use
 app.use(cors({
-  origin: (origin, callback) => {
-    const clientUrl = (process.env.CLIENT_URL || '').replace(/\/$/, '');
-    const allowed = [
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'http://localhost:5175',
-      clientUrl,
-      'https://ppt-ims-system.vercel.app',
-      'https://ppt-ims-systems.vercel.app',
-    ];
-    const checkOrigin = (url: string | undefined) => !url || allowed.includes(url ? url.replace(/\/$/, '') : url);
-    if (checkOrigin(origin)) return callback(null, true);
-    return callback(new Error('Not allowed by CORS'));
-  },
+  origin: true,
   credentials: true,
+  methods: ['GET','HEAD','PUT','PATCH','POST','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization','X-Requested-With'],
 }));
+
+// Explicitly handle preflight OPTIONS requests
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', req.headers['access-control-request-headers'] || 'Content-Type,Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.sendStatus(204);
+});
 
 // Rate limiting
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 500 }));
