@@ -561,7 +561,7 @@ router.post('/audiobooks', evangOnly, async (req: Request, res: Response, next: 
     const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
     const chapters = JSON.stringify(data.chapters.map(title => ({ title, done: false })));
     await prisma.$executeRawUnsafe(
-      `INSERT INTO "Audiobook" (id, "bookName", "reader", "chapters", "fileUrl", "approved", "createdById", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, NULL, 0, $5, $6, $7)`,
+      `INSERT INTO "Audiobook" (id, "bookName", "reader", "chapters", "fileUrl", "approved", "createdById", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, NULL, false, $5, $6, $7)`,
       id, data.bookName, data.reader, chapters, req.user!.id, now, now
     );
     const [audiobook] = await prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "Audiobook" WHERE id = $1`, id);
@@ -577,7 +577,7 @@ router.patch('/audiobooks/:id', evangOnly, async (req: Request, res: Response, n
     const values: any[] = [];
 
     if (fileUrl !== undefined) { sets.push('"fileUrl" = $' + (values.length + 1)); values.push(fileUrl); }
-    if (approved !== undefined) { sets.push('"approved" = $' + (values.length + 1)); values.push(approved ? 1 : 0); }
+    if (approved !== undefined) { sets.push('"approved" = $' + (values.length + 1)); values.push(Boolean(approved)); }
     if (bookName !== undefined) { sets.push('"bookName" = $' + (values.length + 1)); values.push(bookName); }
     if (reader !== undefined) { sets.push('"reader" = $' + (values.length + 1)); values.push(reader); }
     if (chapters !== undefined) { sets.push('"chapters" = $' + (values.length + 1)); values.push(JSON.stringify(chapters)); }
