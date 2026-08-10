@@ -558,7 +558,7 @@ router.post('/audiobooks', evangOnly, async (req: Request, res: Response, next: 
   try {
     const data = createAudiobookSchema.parse(req.body);
     const id = require('crypto').randomBytes(12).toString('hex');
-    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const now = new Date();
     const chapters = JSON.stringify(data.chapters.map(title => ({ title, done: false })));
     await prisma.$executeRawUnsafe(
       `INSERT INTO "Audiobook" (id, "bookName", "reader", "chapters", "fileUrl", "approved", "createdById", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, NULL, false, $5, $6, $7)`,
@@ -584,7 +584,7 @@ router.patch('/audiobooks/:id', evangOnly, async (req: Request, res: Response, n
 
     if (sets.length === 0) { res.status(400).json({ error: 'Nothing to update' }); return; }
 
-    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const now = new Date();
     sets.push('"updatedAt" = $' + (values.length + 1));
     values.push(now);
     values.push(req.params.id);
@@ -592,7 +592,7 @@ router.patch('/audiobooks/:id', evangOnly, async (req: Request, res: Response, n
     const idPlaceholder = '$' + (values.length);
     await prisma.$executeRawUnsafe(`UPDATE "Audiobook" SET ${sets.join(', ')} WHERE id = ${idPlaceholder}`, ...values);
     const [audiobook] = await prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "Audiobook" WHERE id = $1`, req.params.id);
-    res.json({ ...audiobook, chapters: JSON.parse(audiobook.chapters || '[]'), approved: audiobook.approved === 1 });
+    res.json({ ...audiobook, chapters: JSON.parse(audiobook.chapters || '[]'), approved: !!audiobook.approved });
   } catch (err) { next(err); }
 });
 
@@ -608,7 +608,7 @@ router.patch('/audiobooks/:id/chapters/:index', evangOnly, async (req: Request, 
     if (idx < 0 || idx >= chapters.length) { res.status(400).json({ error: 'Invalid chapter index' }); return; }
 
     chapters[idx].done = !!done;
-    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const now = new Date();
     await prisma.$executeRawUnsafe(
       `UPDATE "Audiobook" SET "chapters" = $1, "updatedAt" = $2 WHERE id = $3`,
       JSON.stringify(chapters), now, req.params.id
