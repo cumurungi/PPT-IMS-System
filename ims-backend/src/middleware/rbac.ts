@@ -130,7 +130,7 @@ export function requirePermission(...permissions: string[]) {
       try {
         const prisma = require('../lib/prisma').default;
         const rows: any[] = await prisma.$queryRawUnsafe(
-          `SELECT permissions FROM User WHERE id = ? LIMIT 1`,
+          `SELECT "permissions" FROM "User" WHERE id = $1 LIMIT 1`,
           req.user.id
         );
         req.user.permissions = rows[0]?.permissions || null;

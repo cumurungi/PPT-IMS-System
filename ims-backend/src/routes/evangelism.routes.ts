@@ -561,7 +561,7 @@ router.post('/audiobooks', evangOnly, async (req: Request, res: Response, next: 
     const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
     const chapters = JSON.stringify(data.chapters.map(title => ({ title, done: false })));
     await prisma.$executeRawUnsafe(
-      `INSERT INTO "Audiobook" (id, "bookName", "reader", "chapters", "fileUrl", approved, createdById, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, NULL, 0, $5, $6, $7)`,
+      `INSERT INTO "Audiobook" (id, "bookName", "reader", "chapters", "fileUrl", "approved", "createdById", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, NULL, 0, $5, $6, $7)`,
       id, data.bookName, data.reader, chapters, req.user!.id, now, now
     );
     const [audiobook] = await prisma.$queryRawUnsafe<any[]>(`SELECT * FROM "Audiobook" WHERE id = $1`, id);
@@ -601,7 +601,7 @@ router.patch('/audiobooks/:id/chapters/:index', evangOnly, async (req: Request, 
   try {
     const { done } = req.body;
     const idx = parseInt(req.params.index);
-    const [audiobook] = await prisma.$queryRawUnsafe<any[]>(`SELECT chapters FROM "Audiobook" WHERE id = $1`, req.params.id);
+    const [audiobook] = await prisma.$queryRawUnsafe<any[]>(`SELECT "chapters" FROM "Audiobook" WHERE id = $1`, req.params.id);
     if (!audiobook) { res.status(404).json({ error: 'Not found' }); return; }
 
     const chapters = JSON.parse(audiobook.chapters || '[]');
@@ -610,7 +610,7 @@ router.patch('/audiobooks/:id/chapters/:index', evangOnly, async (req: Request, 
     chapters[idx].done = !!done;
     const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
     await prisma.$executeRawUnsafe(
-      `UPDATE "Audiobook" SET chapters = $1, "updatedAt" = $2 WHERE id = $3`,
+      `UPDATE "Audiobook" SET "chapters" = $1, "updatedAt" = $2 WHERE id = $3`,
       JSON.stringify(chapters), now, req.params.id
     );
     res.json({ chapters });

@@ -64,7 +64,7 @@ router.get('/', requireRole('ADMIN'), async (req: Request, res: Response, next: 
       try {
         const placeholders = userIds.map((_, i) => `$${i + 1}`).join(',');
         const rawUsers: any[] = await prisma.$queryRawUnsafe(
-          `SELECT id, permissions FROM "User" WHERE id IN (${placeholders})`,
+          `SELECT id, "permissions" FROM "User" WHERE id IN (${placeholders})`,
           ...userIds
         );
         for (const ru of rawUsers) {
@@ -169,7 +169,7 @@ router.post('/', requireRole('ADMIN'), async (req: Request, res: Response, next:
     // Store permissions separately if provided
     if (data.permissions?.length) {
       await prisma.$executeRawUnsafe(
-        'UPDATE "User" SET permissions = $1 WHERE id = $2',
+        'UPDATE "User" SET "permissions" = $1 WHERE id = $2',
         JSON.stringify(data.permissions),
         user.id
       ).catch(() => {});
@@ -224,7 +224,7 @@ router.patch('/:id', requireRole('ADMIN'), async (req: Request, res: Response, n
     // Update permissions separately
     if (permissions !== undefined) {
       await prisma.$executeRawUnsafe(
-        'UPDATE "User" SET permissions = $1 WHERE id = $2',
+        'UPDATE "User" SET "permissions" = $1 WHERE id = $2',
         permissions.length ? JSON.stringify(permissions) : null,
         user.id
       ).catch(() => {});
