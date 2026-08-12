@@ -12,8 +12,20 @@
       ></div>
     </div>
     <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400">
-      <span>{{ dept.completedTasks }}/{{ dept.tasks }} tasks</span>
-      <span>{{ completionRate }}%</span>
+      <span>{{ dept.metricLabel || 'Items' }}: {{ dept.total || 0 }}</span>
+      <span>{{ dept.completedLabel || 'Done' }}: {{ dept.completed || 0 }}</span>
+    </div>
+    <div v-if="dept.pendingApprovals" class="text-xs text-amber-600 dark:text-amber-400 mt-1">
+      ⚠️ {{ dept.pendingApprovals }} pending approval{{ dept.pendingApprovals > 1 ? 's' : '' }}
+    </div>
+    <div v-if="dept.pendingLeave" class="text-xs text-amber-600 dark:text-amber-400 mt-1">
+      ⚠️ {{ dept.pendingLeave }} leave request{{ dept.pendingLeave > 1 ? 's' : '' }}
+    </div>
+    <div v-if="dept.openTickets" class="text-xs text-amber-600 dark:text-amber-400 mt-1">
+      ⚠️ {{ dept.openTickets }} open ticket{{ dept.openTickets > 1 ? 's' : '' }}
+    </div>
+    <div v-if="dept.queueSize" class="text-xs text-blue-600 dark:text-blue-400 mt-1">
+      📡 {{ dept.queueSize }} in publishing queue
     </div>
   </div>
 </template>
@@ -26,14 +38,22 @@ const props = defineProps<{
     department: string;
     users: number;
     projects: number;
-    tasks: number;
-    completedTasks: number;
+    metricLabel?: string;
+    completedLabel?: string;
+    total?: number;
+    completed?: number;
+    pendingApprovals?: number;
+    pendingLeave?: number;
+    openTickets?: number;
+    queueSize?: number;
   };
 }>();
 
 const completionRate = computed(() => {
-  if (props.dept.tasks === 0) return 0;
-  return Math.round((props.dept.completedTasks / props.dept.tasks) * 100);
+  const total = props.dept.total || 0;
+  const completed = props.dept.completed || 0;
+  if (total === 0) return 0;
+  return Math.round((completed / total) * 100);
 });
 
 function formatDept(d: string) {

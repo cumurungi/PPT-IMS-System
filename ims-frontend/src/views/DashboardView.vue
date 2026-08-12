@@ -28,33 +28,10 @@
     <template v-else-if="stats">
       <!-- Personal Stats (all users see this) -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon="✅" label="My Tasks" :value="stats.personal.totalTasks" color="blue" />
-        <StatCard icon="🎯" label="Tasks Completed" :value="stats.personal.completedTasks" color="green" />
-        <StatCard icon="⚠️" label="Overdue" :value="stats.personal.overdueTasks" color="red" />
         <StatCard icon="🔔" label="Notifications" :value="stats.personal.unreadNotifications" color="yellow" />
-      </div>
-
-      <!-- Upcoming Deadlines -->
-      <div v-if="upcomingTasks.length > 0" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">⏰ Due Soon</h3>
-          <RouterLink to="/tasks" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">View all →</RouterLink>
-        </div>
-        <div class="space-y-2">
-          <div v-for="task in upcomingTasks" :key="task.id"
-            class="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
-            <div class="flex items-center gap-3 min-w-0">
-              <span :class="['w-2 h-2 rounded-full flex-shrink-0', task.isOverdue ? 'bg-red-500' : task.isToday ? 'bg-orange-500' : 'bg-blue-500']"></span>
-              <div class="min-w-0">
-                <p class="text-sm text-gray-900 dark:text-gray-100 truncate">{{ task.title }}</p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">{{ task.project }}</p>
-              </div>
-            </div>
-            <span :class="['text-xs font-medium whitespace-nowrap ml-3', task.isOverdue ? 'text-red-600' : task.isToday ? 'text-orange-600' : 'text-gray-500 dark:text-gray-400']">
-              {{ task.dueLabel }}
-            </span>
-          </div>
-        </div>
+        <StatCard v-if="stats.media" icon="🎬" label="Recordings" :value="stats.media.recordings" color="purple" />
+        <StatCard v-if="stats.it" icon="🎫" label="Open Tickets" :value="stats.it.openTickets" color="orange" />
+        <StatCard v-if="stats.hr" icon="🏖️" label="Pending Leave" :value="stats.hr.pendingLeave" color="blue" />
       </div>
 
       <!-- ADMIN DASHBOARD -->
@@ -65,9 +42,9 @@
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <StatCard icon="👥" label="Total Users" :value="stats.admin.totalUsers" color="purple" />
             <StatCard icon="📁" label="Active Projects" :value="stats.admin.totalProjects" color="blue" />
-            <StatCard icon="📊" label="Completion Rate" :value="stats.admin.completionRate + '%'" color="green" />
+            <StatCard icon="🏖️" label="Pending Leave" :value="stats.admin.pendingLeave" color="yellow" />
+            <StatCard icon="💰" label="Pending Expenses" :value="stats.admin.pendingExpenses" color="green" />
             <StatCard icon="🎫" label="Open Tickets" :value="stats.admin.openTickets" color="orange" />
-            <StatCard icon="⏰" label="All Overdue" :value="stats.admin.overdueTasks" color="red" />
           </div>
         </div>
 
@@ -75,11 +52,11 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
             <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Pending Actions</h3>
-            <div class="space-y-3">
-              <PendingItem label="Leave Requests" :count="stats.admin.pendingLeave" icon="🏖️" />
-              <PendingItem label="Expense Approvals" :count="stats.admin.pendingExpenses" icon="💰" />
-              <PendingItem v-if="stats.media" label="Content Approvals" :count="stats.media.pendingApproval" icon="🎬" />
-              <PendingItem v-if="stats.it" label="Critical Tickets" :count="stats.it.criticalTickets" icon="🚨" />
+            <div class="space-y-1">
+              <PendingItem label="Leave Requests" :count="stats.admin.pendingLeave" icon="🏖️" to="/hr" />
+              <PendingItem label="Expense Approvals" :count="stats.admin.pendingExpenses" icon="💰" to="/hr" />
+              <PendingItem v-if="stats.media" label="Content Approvals" :count="stats.media.pendingApproval" icon="🎬" to="/media" />
+              <PendingItem v-if="stats.it" label="Critical Tickets" :count="stats.it.criticalTickets" icon="🚨" to="/it" />
             </div>
           </div>
 
@@ -223,9 +200,9 @@
       <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
         <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Quick Actions</h3>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <RouterLink to="/tasks" class="flex flex-col items-center gap-2 p-4 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors">
-            <span class="text-2xl">✅</span>
-            <span class="text-xs font-medium text-gray-700 dark:text-gray-300">My Tasks</span>
+          <RouterLink to="/notifications" class="flex flex-col items-center gap-2 p-4 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors">
+            <span class="text-2xl">🔔</span>
+            <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Notifications</span>
           </RouterLink>
           <RouterLink to="/projects" class="flex flex-col items-center gap-2 p-4 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors">
             <span class="text-2xl">📁</span>
@@ -269,16 +246,11 @@ import DeptCard from '@/components/dashboard/DeptCard.vue';
 const auth = useAuthStore();
 const stats = ref<any>(null);
 const loading = ref(true);
-const upcomingTasks = ref<any[]>([]);
 
 onMounted(async () => {
   try {
-    const [dashRes, upcomingRes] = await Promise.all([
-      api.get('/dashboard/stats'),
-      api.get('/tasks/upcoming'),
-    ]);
-    stats.value = dashRes.data;
-    upcomingTasks.value = upcomingRes.data || [];
+    const { data } = await api.get('/dashboard/stats');
+    stats.value = data;
   } catch (err) {
     console.error('Failed to load dashboard stats:', err);
   } finally {

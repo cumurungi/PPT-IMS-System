@@ -153,8 +153,12 @@ function formatDate(d: string) {
 async function fetchLogs() {
   loading.value = true;
   try {
-    const { data } = await api.get('/audit-logs', { params: { page: page.value, limit: pageSize } });
-    logs.value = data;
+    const params: any = { page: page.value, limit: pageSize };
+    if (search.value) params.search = search.value;
+    if (filterAction.value) params.action = filterAction.value;
+    if (filterEntity.value) params.entityType = filterEntity.value;
+    const { data } = await api.get('/audit-logs', { params });
+    logs.value = data.data || data;
   } catch (err) { console.error(err); }
   finally { loading.value = false; }
 }

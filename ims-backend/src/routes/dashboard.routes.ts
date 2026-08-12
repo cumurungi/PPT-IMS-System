@@ -47,15 +47,39 @@ router.get('/stats', async (req: Request, res: Response, next: NextFunction) => 
         prisma.expenseRequest.count({ where: { status: 'PENDING' } }),
       ]);
 
-      // Department breakdown
+      // Department breakdown — department-specific metrics instead of generic task counts
       const deptStats = await Promise.all(
-        ['MEDIA', 'EVANGELISM', 'IT', 'HR_FINANCE'].map(async (d) => ({
-          department: d,
-          users: await prisma.user.count({ where: { department: d as any, isActive: true } }),
-          projects: await prisma.project.count({ where: { department: d as any, isActive: true } }),
-          tasks: await prisma.task.count({ where: { project: { department: d as any } } }),
-          completedTasks: await prisma.task.count({ where: { project: { department: d as any }, status: 'COMPLETED' } }),
-        }))
+        ['MEDIA', 'EVANGELISM', 'IT', 'HR_FINANCE'].map(async (d) => {
+          if (d === 'MEDIA') {
+            const [recordings, published, pendingApproval] = await Promise.all([
+              prisma.recording.count(),
+              prisma.recording.count({ where: { status: { in: ['EDITED', 'APPROVED', 'PUBLISHED'] } } }),
+              prisma.recording.count({ where: { status: 'EDITED' } }),
+            ]);
+            return { department: d, users: await prisma.user.count({ where: { department: d as any, isActive: true } }), projects: await prisma.project.count({ where: { department: d as any, isActive: true } }), recordings, published, pendingApproval, metricLabel: 'Recordings', completedLabel: 'Published/Edited', completed: published, total: recordings };
+          }
+          if (d === 'EVANGELISM') {
+            const [events, completedEvents, pendingApprovals] = await Promise.all([
+              prisma.event.count(),
+              prisma.event.count({ where: { status: 'COMPLETED' } }),
+              prisma.contentApproval.count({ where: { decision: false } }),
+            ]);
+            return { department: d, users: await prisma.user.count({ where: { department: d as any, isActive: true } }), projects: await prisma.project.count({ where: { department: d as any, isActive: true } }), events, completedEvents, pendingApprovals, metricLabel: 'Sermons', completedLabel: 'Completed', completed: completedEvents, total: events };
+          }
+          if (d === 'IT') {
+            const [openTickets, closedTickets, queueSize] = await Promise.all([
+              prisma.supportTicket.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS'] } } }),
+              prisma.supportTicket.count({ where: { status: 'CLOSED' } }),
+              prisma.publishingQueue.count({ where: { publishedAt: null } }),
+            ]);
+            return { department: d, users: await prisma.user.count({ where: { department: d as any, isActive: true } }), projects: await prisma.project.count({ where: { department: d as any, isActive: true } }), openTickets, closedTickets, queueSize, metricLabel: 'Open Tickets', completedLabel: 'Closed', completed: closedTickets, total: openTickets + closedTickets };
+          }
+          const [pendingLeave, pendingExpenses] = await Promise.all([
+            prisma.leaveRequest.count({ where: { status: 'PENDING' } }),
+            prisma.expenseRequest.count({ where: { status: 'PENDING' } }),
+          ]);
+          return { department: d, users: await prisma.user.count({ where: { department: d as any, isActive: true } }), projects: await prisma.project.count({ where: { department: d as any, isActive: true } }), pendingLeave, pendingExpenses, metricLabel: 'Pending Approvals', completedLabel: 'Resolved', completed: 0, total: pendingLeave + pendingExpenses };
+        })
       );
 
       // Recent audit logs

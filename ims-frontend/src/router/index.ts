@@ -29,6 +29,7 @@ const router = createRouter({
         { path: 'profile', name: 'profile', component: () => import('@/views/ProfileView.vue') },
         { path: 'admin/users', name: 'admin-users', component: () => import('@/views/AdminUsersView.vue'), meta: { roles: ['ADMIN'] } },
         { path: 'admin/audit-logs', name: 'audit-logs', component: () => import('@/views/AuditLogsView.vue'), meta: { roles: ['ADMIN'] } },
+        { path: 'admin/departments', name: 'admin-departments', component: () => import('@/views/DepartmentsView.vue'), meta: { roles: ['ADMIN'] } },
       ],
     },
     { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('@/views/NotFoundView.vue'), meta: { public: true } },
