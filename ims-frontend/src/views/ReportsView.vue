@@ -8,6 +8,12 @@
         </p>
       </div>
       <div class="flex items-center gap-2">
+        <input
+          v-model="selectedDate"
+          type="date"
+          @change="onDateChange"
+          class="border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+        />
         <button @click="prevWeek" class="px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">← Previous</button>
         <button @click="thisWeek" class="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">This Week</button>
         <button @click="nextWeek" class="px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">Next →</button>
@@ -360,6 +366,7 @@ import api from '@/api/axios';
 const data = ref<any>({ departments: {}, reports: [] });
 const loading = ref(true);
 const weekStart = ref('');
+const selectedDate = ref('');
 
 function getMonday() {
   const now = new Date();
@@ -372,6 +379,25 @@ function getMonday() {
 }
 
 const currentMonday = ref(getMonday());
+
+function updateSelectedDate() {
+  const d = new Date(currentMonday.value);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  selectedDate.value = `${year}-${month}-${day}`;
+}
+
+function onDateChange() {
+  if (!selectedDate.value) return;
+  const d = new Date(selectedDate.value);
+  const day = d.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+  d.setDate(d.getDate() - diff);
+  d.setHours(0, 0, 0, 0);
+  currentMonday.value = d;
+  fetchReport();
+}
 
 function formatDate(d: string) {
   if (!d) return '';
@@ -388,9 +414,9 @@ function deptLabel(dept: string | number) {
   return map[dept] || dept;
 }
 
-function prevWeek() { currentMonday.value = new Date(currentMonday.value.getTime() - 7 * 86400000); fetchReport(); }
-function nextWeek() { currentMonday.value = new Date(currentMonday.value.getTime() + 7 * 86400000); fetchReport(); }
-function thisWeek() { currentMonday.value = getMonday(); fetchReport(); }
+function prevWeek() { currentMonday.value = new Date(currentMonday.value.getTime() - 7 * 86400000); updateSelectedDate(); fetchReport(); }
+function nextWeek() { currentMonday.value = new Date(currentMonday.value.getTime() + 7 * 86400000); updateSelectedDate(); fetchReport(); }
+function thisWeek() { currentMonday.value = getMonday(); updateSelectedDate(); fetchReport(); }
 
 function formatEventDate(d: string) {
   if (!d) return '';
@@ -430,5 +456,8 @@ async function fetchReport() {
   finally { loading.value = false; }
 }
 
-onMounted(fetchReport);
+onMounted(() => {
+  updateSelectedDate();
+  fetchReport();
+});
 </script>

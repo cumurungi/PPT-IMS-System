@@ -378,6 +378,12 @@ router.get('/auto-weekly', async (req: Request, res: Response, next: NextFunctio
       departments[dept].push(r);
     }
 
+    // Always include all departments so the UI shows them even with no activity
+    const allDepartments = ['MEDIA', 'EVANGELISM', 'IT', 'HR_FINANCE'];
+    for (const dept of allDepartments) {
+      if (!departments[dept]) departments[dept] = [];
+    }
+
     res.json({ weekStart: weekStart.toISOString(), weekEnd: weekEnd.toISOString(), departments, reports });
   } catch (err) { next(err); }
 });
