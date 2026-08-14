@@ -62,8 +62,12 @@
                 <p class="text-xs text-gray-500 dark:text-gray-400">Recordings</p>
               </div>
               <div v-else-if="r.user.department === 'IT'" class="bg-gray-50 dark:bg-gray-700 rounded-lg px-2 py-1.5 text-center">
-                <p class="text-lg font-bold text-gray-700 dark:text-gray-300">{{ r.summary.published }}</p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">Published</p>
+                <p class="text-lg font-bold text-gray-700 dark:text-gray-300">{{ r.summary.ticketsHandled + r.summary.published }}</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">Tickets + Published</p>
+              </div>
+              <div v-else-if="r.user.department === 'HR_FINANCE'" class="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg px-2 py-1.5 text-center">
+                <p class="text-lg font-bold text-indigo-700 dark:text-indigo-300">{{ r.summary.doneThisWeek }}</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">Approvals + Tasks</p>
               </div>
               <div v-else class="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg px-2 py-1.5 text-center">
                 <p class="text-lg font-bold text-indigo-700 dark:text-indigo-300">{{ r.summary.totalCompleted }}</p>
@@ -196,7 +200,111 @@
                 </div>
               </template>
 
+              <!-- ============ IT ============ -->
+              <template v-else-if="r.user.department === 'IT'">
+                <div v-if="r.details.published?.length > 0">
+                  <p class="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">✅ Published on Platforms (Done):</p>
+                  <ul class="list-disc list-inside text-xs text-gray-700 dark:text-gray-300 space-y-0.5">
+                    <li v-for="t in r.details.published" :key="t">{{ t }}</li>
+                  </ul>
+                </div>
+                <div v-if="r.details.completedTasks?.length > 0">
+                  <p class="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">✅ Tasks Completed This Week:</p>
+                  <ul class="list-disc list-inside text-xs text-gray-700 dark:text-gray-300 space-y-0.5">
+                    <li v-for="t in r.details.completedTasks" :key="t">{{ t }}</li>
+                  </ul>
+                </div>
+                <div v-else-if="r.details.recentCompleted?.length > 0">
+                  <p class="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">✅ Recently Completed (previous weeks):</p>
+                  <ul class="list-disc list-inside text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
+                    <li v-for="t in r.details.recentCompleted" :key="t">{{ t }}</li>
+                  </ul>
+                </div>
+                <div v-if="r.details.itTicketsByStatus?.length > 0">
+                  <p class="text-xs text-amber-600 dark:text-amber-400 font-medium mb-1">🎫 Tickets Handled:</p>
+                  <ul class="list-disc list-inside text-xs text-amber-700 dark:text-amber-300 space-y-0.5">
+                    <li v-for="t in r.details.itTicketsByStatus" :key="t">{{ t }}</li>
+                  </ul>
+                </div>
+                <div v-if="r.details.tickets?.length > 0">
+                  <p class="text-xs text-amber-600 dark:text-amber-400 font-medium mb-1">🔄 Ticket Details:</p>
+                  <ul class="list-disc list-inside text-xs text-amber-700 dark:text-amber-300 space-y-0.5">
+                    <li v-for="t in r.details.tickets" :key="t">{{ t }}</li>
+                  </ul>
+                </div>
+                <div v-if="r.details.itQueueItems?.length > 0">
+                  <p class="text-xs text-blue-600 dark:text-blue-400 font-medium mb-1">📡 Publishing Queue:</p>
+                  <ul class="list-disc list-inside text-xs text-gray-700 dark:text-gray-300 space-y-0.5">
+                    <li v-for="t in r.details.itQueueItems" :key="t">{{ t }}</li>
+                  </ul>
+                </div>
+                <div v-if="r.details.inProgressTasks?.length > 0">
+                  <p class="text-xs text-amber-600 dark:text-amber-400 font-medium mb-1">🔄 Tasks In Progress:</p>
+                  <ul class="list-disc list-inside text-xs text-amber-700 dark:text-amber-300 space-y-0.5">
+                    <li v-for="t in r.details.inProgressTasks" :key="t">{{ t }}</li>
+                  </ul>
+                </div>
+                <div v-if="r.details.nextWeekTasks?.length > 0" class="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                  <p class="text-xs text-blue-600 dark:text-blue-400 font-medium mb-1">📅 Next Week:</p>
+                  <ul class="list-disc list-inside text-xs text-gray-700 dark:text-gray-300 space-y-0.5">
+                    <li v-for="t in r.details.nextWeekTasks" :key="t">{{ t }}</li>
+                  </ul>
+                </div>
+              </template>
+
               <!-- ============ HR / FINANCE / ADMIN / OTHER ============ -->
+              <template v-else-if="r.user.department === 'HR_FINANCE'">
+                <div v-if="r.details.leaveProcessed?.length > 0">
+                  <p class="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">🏖️ Leave Requests Processed:</p>
+                  <ul class="list-disc list-inside text-xs text-gray-700 dark:text-gray-300 space-y-0.5">
+                    <li v-for="t in r.details.leaveProcessed" :key="t">{{ t }}</li>
+                  </ul>
+                </div>
+                <div v-if="r.details.expenseProcessed?.length > 0">
+                  <p class="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">💰 Expense Approvals Processed:</p>
+                  <ul class="list-disc list-inside text-xs text-gray-700 dark:text-gray-300 space-y-0.5">
+                    <li v-for="t in r.details.expenseProcessed" :key="t">{{ t }}</li>
+                  </ul>
+                </div>
+                <div v-if="r.details.attendanceUploaded?.length > 0">
+                  <p class="text-xs text-blue-600 dark:text-blue-400 font-medium mb-1">📄 Attendance Reports Uploaded:</p>
+                  <ul class="list-disc list-inside text-xs text-gray-700 dark:text-gray-300 space-y-0.5">
+                    <li v-for="t in r.details.attendanceUploaded" :key="t">{{ t }}</li>
+                  </ul>
+                </div>
+                <div v-if="r.details.completedTasks?.length > 0">
+                  <p class="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">✅ Done This Week:</p>
+                  <ul class="list-disc list-inside text-xs text-gray-700 dark:text-gray-300 space-y-0.5">
+                    <li v-for="t in r.details.completedTasks" :key="t">{{ t }}</li>
+                  </ul>
+                </div>
+                <div v-else-if="r.details.recentCompleted?.length > 0">
+                  <p class="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">✅ Recently Done (previous weeks):</p>
+                  <ul class="list-disc list-inside text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
+                    <li v-for="t in r.details.recentCompleted" :key="t">{{ t }}</li>
+                  </ul>
+                </div>
+                <div v-if="r.details.inProgressTasks?.length > 0">
+                  <p class="text-xs text-amber-600 dark:text-amber-400 font-medium mb-1">🔄 In Progress:</p>
+                  <ul class="list-disc list-inside text-xs text-amber-700 dark:text-amber-300 space-y-0.5">
+                    <li v-for="t in r.details.inProgressTasks" :key="t">{{ t }}</li>
+                  </ul>
+                </div>
+                <div v-if="r.details.tasksAssigned?.length > 0">
+                  <p class="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">📋 Tasks Assigned to Team:</p>
+                  <ul class="list-disc list-inside text-xs text-gray-700 dark:text-gray-300 space-y-0.5">
+                    <li v-for="t in r.details.tasksAssigned" :key="t">{{ t }}</li>
+                  </ul>
+                </div>
+                <div v-if="r.details.nextWeekTasks?.length > 0" class="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                  <p class="text-xs text-blue-600 dark:text-blue-400 font-medium mb-1">📅 Next Week:</p>
+                  <ul class="list-disc list-inside text-xs text-gray-700 dark:text-gray-300 space-y-0.5">
+                    <li v-for="t in r.details.nextWeekTasks" :key="t">{{ t }}</li>
+                  </ul>
+                </div>
+              </template>
+
+              <!-- ============ ADMIN / OTHER ============ -->
               <template v-else>
                 <div v-if="r.details.completedTasks?.length > 0">
                   <p class="text-xs text-gray-500 dark:text-gray-400 font-medium mb-1">✅ Done This Week:</p>
@@ -230,7 +338,7 @@
                 </div>
               </template>
 
-              <p v-if="r.summary.doneThisWeek === 0 && r.summary.inProgress === 0 && r.summary.nextWeekCount === 0 && !r.details.recordingsDone?.length && !r.details.recordingsInProgress?.length"
+              <p v-if="r.summary.doneThisWeek === 0 && r.summary.inProgress === 0 && r.summary.nextWeekCount === 0 && !r.details.recordingsDone?.length && !r.details.recordingsInProgress?.length && !r.details.itTicketsByStatus?.length && !r.details.itQueueItems?.length && !r.details.leaveProcessed?.length && !r.details.expenseProcessed?.length && !r.details.attendanceUploaded?.length"
                 class="text-xs text-gray-400 dark:text-gray-500 italic">No activity this week.</p>
             </div>
           </div>

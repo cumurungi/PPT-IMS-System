@@ -58,6 +58,9 @@ router.get('/auto-weekly', async (req: Request, res: Response, next: NextFunctio
     // For each user, gather their weekly activity
     const reports = await Promise.all(users.map(async (u) => {
       const isEvang = u.department === 'EVANGELISM';
+      const isMedia = u.department === 'MEDIA';
+      const isIT = u.department === 'IT';
+      const isHR = u.department === 'HR_FINANCE';
       const preacherIds = isEvang ? await getPreacherIdsForUser(u) : [];
 
       // For Evangelism we should not include task-related stats/details (they are reported via sermons/audiobooks)
@@ -76,8 +79,6 @@ router.get('/auto-weekly', async (req: Request, res: Response, next: NextFunctio
           prisma.task.count({ where: { assigneeId: u.id, status: 'COMPLETED' } }),
         ]);
       }
-
-      const isMedia = u.department === 'MEDIA';
 
       // Next week date range (used for next-week tasks and recordings)
       const nextWeekStart = new Date(weekEnd);
@@ -194,6 +195,35 @@ router.get('/auto-weekly', async (req: Request, res: Response, next: NextFunctio
         take: 10,
       });
 
+      // IT-specific: tickets by status breakdown and queue items
+      const itTicketsByStatus = isIT ? await prisma.supportTicket.groupBy({
+        by: ['status'],
+        where: { assigneeId: u.id, updatedAt: { gte: weekStart, lte: weekEnd } },
+        _count: { _all: true },
+      }) : [];
+      const itQueueItems = isIT ? await prisma.publishingQueue.findMany({
+        where: { publishedById: u.id, publishedAt: { gte: weekStart, lte: weekEnd } },
+        include: { recording: { select: { title: true } }, platforms: { include: { platform: { select: { name: true } } } } },
+        take: 10,
+      }) : [];
+
+      // HR-specific: leave requests and expense approvals processed this week
+      const leaveProcessed = isHR ? await prisma.leaveRequest.findMany({
+        where: { reviewedById: u.id, updatedAt: { gte: weekStart, lte: weekEnd } },
+        select: { id: true, status: true, leaveType: true, startDate: true, endDate: true, user: { select: { name: true } } },
+        take: 20,
+      }) : [];
+      const expenseProcessed = isHR ? await prisma.expenseRequest.findMany({
+        where: { reviewedById: u.id, updatedAt: { gte: weekStart, lte: weekEnd } },
+        select: { id: true, status: true, description: true, amount: true },
+        take: 20,
+      }) : [];
+      const attendanceUploaded = isHR ? await prisma.attendanceRecord.findMany({
+        where: { userId: u.id, createdAt: { gte: weekStart, lte: weekEnd } },
+        select: { id: true, date: true },
+        take: 10,
+      }) : [];
+
       // Next week tasks
       const nextWeekTasks = isEvang ? [] : await prisma.task.findMany({
         where: {
@@ -266,12 +296,18 @@ router.get('/auto-weekly', async (req: Request, res: Response, next: NextFunctio
             ? recordingsDone.length
             : isEvang
               ? eventsThisWeek.length + approvalsDone.length
-              : tasksCompleted + userPublished.length,
+              : isIT
+                ? ticketsHandled + userPublished.length
+                : isHR
+                  ? leaveProcessed.length + expenseProcessed.length
+                  : tasksCompleted + userPublished.length,
           inProgress: isMedia
             ? recordingsInProgress.length
             : isEvang
               ? eventsInProgress.length
-              : tasksInProgress + ticketDetails.length,
+              : isIT
+                ? ticketDetails.length + itQueueItems.length
+                : tasksInProgress + ticketDetails.length,
           nextWeekCount: isMedia
             ? nextWeekRecordings.length
             : isEvang
@@ -323,6 +359,13 @@ router.get('/auto-weekly', async (req: Request, res: Response, next: NextFunctio
             const statusLabel = t.status === 'TODO' ? '⬜' : t.status === 'IN_PROGRESS' ? '🔄' : t.status === 'IN_REVIEW' ? '👁️' : '🚫';
             return `${statusLabel} ${t.title}${due ? ` (due ${due})` : ''}`;
           }),
+          // IT-specific
+          itTicketsByStatus: itTicketsByStatus.map(s => `${s.status}: ${s._count._all}`),
+          itQueueItems: itQueueItems.map(q => `${q.recording?.title} → ${q.platforms.map(pp => pp.platform?.name).join(', ')}`),
+          // HR-specific
+          leaveProcessed: leaveProcessed.map(l => `${l.user?.name || 'Unknown'} — ${l.status}`),
+          expenseProcessed: expenseProcessed.map(e => `${e.description} (${Number(e.amount).toLocaleString()} RWF) — ${e.status}`),
+          attendanceUploaded: attendanceUploaded.map(a => `Attendance record ${a.date ? new Date(a.date).toLocaleDateString('en-GB') : ''}`),
         },
       };
     }));
