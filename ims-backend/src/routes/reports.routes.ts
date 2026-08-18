@@ -31,11 +31,22 @@ router.get('/auto-weekly', async (req: Request, res: Response, next: NextFunctio
     sunday.setDate(monday.getDate() + 6);
     sunday.setHours(23, 59, 59, 999);
 
-    // Allow custom week via query
-    const weekStart = req.query.weekStart ? new Date(req.query.weekStart as string) : monday;
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 6);
-    weekEnd.setHours(23, 59, 59, 999);
+    // Allow custom date range via query params — always snap to Monday-Sunday week
+    let weekStart: Date, weekEnd: Date;
+    if (req.query.startDate || req.query.endDate || req.query.weekStart) {
+      const raw = (req.query.startDate || req.query.endDate || req.query.weekStart) as string;
+      const refDate = new Date(raw);
+      const dayOfWeek = refDate.getDay();
+      weekStart = new Date(refDate);
+      weekStart.setDate(refDate.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+      weekStart.setHours(0, 0, 0, 0);
+      weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      weekEnd.setHours(23, 59, 59, 999);
+    } else {
+      weekStart = monday;
+      weekEnd = sunday;
+    }
 
     // Determine which users to report on
     let userFilter: any = {};

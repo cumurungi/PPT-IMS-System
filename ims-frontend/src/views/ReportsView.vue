@@ -7,13 +7,25 @@
           Auto-generated from system activity · Week of {{ formatDate(weekStart) }}
         </p>
       </div>
-      <div class="flex items-center gap-2">
-        <input
-          v-model="selectedDate"
-          type="date"
-          @change="onDateChange"
-          class="border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-        />
+      <div class="flex items-center gap-2 flex-wrap">
+        <div class="flex items-center gap-2">
+          <label class="text-xs text-gray-500 dark:text-gray-400">From:</label>
+          <input
+            v-model="startDate"
+            type="date"
+            @input="onDatePicked('start')"
+            class="border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+          />
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="text-xs text-gray-500 dark:text-gray-400">To:</label>
+          <input
+            v-model="endDate"
+            type="date"
+            @input="onDatePicked('end')"
+            class="border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+          />
+        </div>
         <button @click="prevWeek" class="px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">← Previous</button>
         <button @click="thisWeek" class="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">This Week</button>
         <button @click="nextWeek" class="px-3 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300">Next →</button>
@@ -366,7 +378,8 @@ import api from '@/api/axios';
 const data = ref<any>({ departments: {}, reports: [] });
 const loading = ref(true);
 const weekStart = ref('');
-const selectedDate = ref('');
+const startDate = ref('');
+const endDate = ref('');
 
 function getMonday() {
   const now = new Date();
@@ -378,24 +391,63 @@ function getMonday() {
   return mon;
 }
 
+function getSunday() {
+  const mon = getMonday();
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  sun.setHours(23, 59, 59, 999);
+  return sun;
+}
+
 const currentMonday = ref(getMonday());
 
-function updateSelectedDate() {
-  const d = new Date(currentMonday.value);
+function toISODate(d: Date) {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
-  selectedDate.value = `${year}-${month}-${day}`;
+  return `${year}-${month}-${day}`;
 }
 
-function onDateChange() {
-  if (!selectedDate.value) return;
-  const d = new Date(selectedDate.value);
+function updateDateInputs() {
+  startDate.value = toISODate(currentMonday.value);
+  const sun = new Date(currentMonday.value);
+  sun.setDate(currentMonday.value.getDate() + 6);
+  endDate.value = toISODate(sun);
+}
+
+function parseDate(s: string): Date {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function onDatePicked(source: 'start' | 'end') {
+  const raw = source === 'start' ? startDate.value : endDate.value;
+  if (!raw) return;
+  const d = parseDate(raw);
+  if (isNaN(d.getTime())) return;
+
   const day = d.getDay();
   const diff = day === 0 ? 6 : day - 1;
-  d.setDate(d.getDate() - diff);
-  d.setHours(0, 0, 0, 0);
-  currentMonday.value = d;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - diff);
+  currentMonday.value = monday;
+  updateDateInputs();
+  fetchReport();
+}
+
+function prevWeek() {
+  currentMonday.value = new Date(currentMonday.value.getTime() - 7 * 86400000);
+  updateDateInputs();
+  fetchReport();
+}
+function nextWeek() {
+  currentMonday.value = new Date(currentMonday.value.getTime() + 7 * 86400000);
+  updateDateInputs();
+  fetchReport();
+}
+function thisWeek() {
+  currentMonday.value = getMonday();
+  updateDateInputs();
   fetchReport();
 }
 
@@ -413,10 +465,6 @@ function deptLabel(dept: string | number) {
   const map: Record<string, string> = { MEDIA: 'Media', EVANGELISM: 'Evangelism', IT: 'IT', HR_FINANCE: 'HR / Finance', ADMIN: 'Administration' };
   return map[dept] || dept;
 }
-
-function prevWeek() { currentMonday.value = new Date(currentMonday.value.getTime() - 7 * 86400000); updateSelectedDate(); fetchReport(); }
-function nextWeek() { currentMonday.value = new Date(currentMonday.value.getTime() + 7 * 86400000); updateSelectedDate(); fetchReport(); }
-function thisWeek() { currentMonday.value = getMonday(); updateSelectedDate(); fetchReport(); }
 
 function formatEventDate(d: string) {
   if (!d) return '';
@@ -448,8 +496,10 @@ function eventStatusBadge(status: string) {
 async function fetchReport() {
   loading.value = true;
   try {
-    const ws = currentMonday.value.toISOString().split('T')[0];
-    const { data: result } = await api.get(`/reports/auto-weekly?weekStart=${ws}`);
+    const params: any = {};
+    if (startDate.value) params.startDate = startDate.value;
+    if (endDate.value) params.endDate = endDate.value;
+    const { data: result } = await api.get('/reports/auto-weekly', { params });
     data.value = result;
     weekStart.value = result.weekStart;
   } catch (err) { console.error(err); }
@@ -457,7 +507,7 @@ async function fetchReport() {
 }
 
 onMounted(() => {
-  updateSelectedDate();
+  updateDateInputs();
   fetchReport();
 });
 </script>
