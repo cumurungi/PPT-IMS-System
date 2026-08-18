@@ -4,7 +4,7 @@
       <div>
         <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Weekly Report</h1>
         <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-          Auto-generated from system activity {{ startDate.value && endDate.value ? `· ${formatDate(startDate.value)} – ${formatDate(endDate.value)}` : '' }}
+          Auto-generated from system activity {{ startDate && endDate ? `· ${formatDate(startDate)} – ${formatDate(endDate)}` : '' }}
         </p>
       </div>
       <div class="flex items-center gap-2 flex-wrap">
