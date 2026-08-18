@@ -4,7 +4,7 @@
       <div>
         <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Weekly Report</h1>
         <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-          Auto-generated from system activity · Week of {{ formatDate(weekStart) }}
+          Auto-generated from system activity {{ startDate.value && endDate.value ? `· ${formatDate(startDate.value)} – ${formatDate(endDate.value)}` : '' }}
         </p>
       </div>
       <div class="flex items-center gap-2 flex-wrap">
@@ -13,7 +13,7 @@
           <input
             v-model="startDate"
             type="date"
-            @input="onDatePicked('start')"
+            @input="onDatePicked"
             class="border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
           />
         </div>
@@ -22,7 +22,7 @@
           <input
             v-model="endDate"
             type="date"
-            @input="onDatePicked('end')"
+            @input="onDatePicked"
             class="border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
           />
         </div>
@@ -72,7 +72,7 @@
               </div>
               <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg px-2 py-1.5 text-center">
                 <p class="text-lg font-bold text-blue-700 dark:text-blue-300">{{ r.summary.nextWeekCount }}</p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">Next Week</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">Upcoming</p>
               </div>
               <!-- Department-specific 4th stat -->
               <div v-if="r.user.department === 'MEDIA'" class="bg-purple-50 dark:bg-purple-900/20 rounded-lg px-2 py-1.5 text-center">
@@ -399,8 +399,6 @@ function getSunday() {
   return sun;
 }
 
-const currentMonday = ref(getMonday());
-
 function toISODate(d: Date) {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -408,46 +406,45 @@ function toISODate(d: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function updateDateInputs() {
-  startDate.value = toISODate(currentMonday.value);
-  const sun = new Date(currentMonday.value);
-  sun.setDate(currentMonday.value.getDate() + 6);
-  endDate.value = toISODate(sun);
-}
-
 function parseDate(s: string): Date {
   const [y, m, d] = s.split('-').map(Number);
   return new Date(y, m - 1, d);
 }
 
-function onDatePicked(source: 'start' | 'end') {
-  const raw = source === 'start' ? startDate.value : endDate.value;
-  if (!raw) return;
-  const d = parseDate(raw);
-  if (isNaN(d.getTime())) return;
+function onDatePicked() {
+  if (!startDate.value || !endDate.value) return;
+  const start = parseDate(startDate.value);
+  const end = parseDate(endDate.value);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return;
+  if (end < start) {
+    endDate.value = startDate.value;
+  }
+  fetchReport();
+}
 
-  const day = d.getDay();
-  const diff = day === 0 ? 6 : day - 1;
-  const monday = new Date(d);
-  monday.setDate(d.getDate() - diff);
-  currentMonday.value = monday;
-  updateDateInputs();
+function shiftWeek(days: number) {
+  if (!startDate.value || !endDate.value) return;
+  const start = parseDate(startDate.value);
+  const end = parseDate(endDate.value);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return;
+  start.setDate(start.getDate() + days);
+  end.setDate(end.getDate() + days);
+  startDate.value = toISODate(start);
+  endDate.value = toISODate(end);
   fetchReport();
 }
 
 function prevWeek() {
-  currentMonday.value = new Date(currentMonday.value.getTime() - 7 * 86400000);
-  updateDateInputs();
-  fetchReport();
+  shiftWeek(-7);
 }
 function nextWeek() {
-  currentMonday.value = new Date(currentMonday.value.getTime() + 7 * 86400000);
-  updateDateInputs();
-  fetchReport();
+  shiftWeek(7);
 }
 function thisWeek() {
-  currentMonday.value = getMonday();
-  updateDateInputs();
+  const mon = getMonday();
+  const sun = getSunday();
+  startDate.value = toISODate(mon);
+  endDate.value = toISODate(sun);
   fetchReport();
 }
 
@@ -507,7 +504,10 @@ async function fetchReport() {
 }
 
 onMounted(() => {
-  updateDateInputs();
+  const mon = getMonday();
+  const sun = getSunday();
+  startDate.value = toISODate(mon);
+  endDate.value = toISODate(sun);
   fetchReport();
 });
 </script>

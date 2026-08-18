@@ -31,22 +31,24 @@ router.get('/auto-weekly', async (req: Request, res: Response, next: NextFunctio
     sunday.setDate(monday.getDate() + 6);
     sunday.setHours(23, 59, 59, 999);
 
-    // Allow custom date range via query params — always snap to Monday-Sunday week
+    // Allow custom date range via query params
     let weekStart: Date, weekEnd: Date;
-    if (req.query.startDate || req.query.endDate || req.query.weekStart) {
-      const raw = (req.query.startDate || req.query.endDate || req.query.weekStart) as string;
-      const refDate = new Date(raw);
-      const dayOfWeek = refDate.getDay();
-      weekStart = new Date(refDate);
-      weekStart.setDate(refDate.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
-      weekStart.setHours(0, 0, 0, 0);
-      weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-      weekEnd.setHours(23, 59, 59, 999);
+    if (req.query.startDate || req.query.endDate) {
+      const rawStart = req.query.startDate ? new Date(req.query.startDate as string) : new Date();
+      const rawEnd = req.query.endDate ? new Date(req.query.endDate as string) : new Date(rawStart);
+      rawStart.setHours(0, 0, 0, 0);
+      rawEnd.setHours(23, 59, 59, 999);
+      weekStart = rawStart;
+      weekEnd = rawEnd;
     } else {
       weekStart = monday;
       weekEnd = sunday;
     }
+
+    const afterEnd = new Date(weekEnd);
+    afterEnd.setDate(afterEnd.getDate() + 1);
+    const afterEndClose = new Date(afterEnd);
+    afterEndClose.setDate(afterEnd.getDate() + 30);
 
     // Determine which users to report on
     let userFilter: any = {};
@@ -117,13 +119,13 @@ router.get('/auto-weekly', async (req: Request, res: Response, next: NextFunctio
       const recordingsInProgress = recordingsWorkedOn.filter((r) => IN_PROGRESS_STATUSES.includes(r.status));
       const capturedThisWeek = recordingsWorkedOn.filter((r) => NEXT_WEEK_STATUSES.includes(r.status));
 
-      // Recordings planned to be worked on next week (captured + open edits with due date in next week)
+      // Next 30 days recordings (planned after selected range)
       const nextWeekRecordingsQuery = isMedia ? await prisma.recording.findMany({
         where: {
           AND: [
             { OR: [{ editorId: u.id }, { recordingAssigneeId: u.id }] },
             { status: { in: ['CAPTURED', 'IN_EDITING'] } },
-            { editingDueDate: { gte: nextWeekStart, lte: nextWeekEnd } },
+            { editingDueDate: { gte: afterEnd, lte: afterEndClose } },
           ],
         },
         select: { title: true, status: true, editingDueDate: true },
@@ -270,10 +272,10 @@ router.get('/auto-weekly', async (req: Request, res: Response, next: NextFunctio
         take: 20,
       }) : [];
 
-      // Events next week (sermons with captured recordings planned for next week)
+      // Events upcoming (sermons with captured recordings after selected range)
       const eventsNextWeek = await prisma.event.findMany({
         where: {
-          date: { gte: nextWeekStart, lte: nextWeekEnd },
+          date: { gte: afterEnd, lte: afterEndClose },
           preachers: { some: { preacherId: { in: preacherIds } } },
           recordings: { some: { status: 'CAPTURED' } },
         },
