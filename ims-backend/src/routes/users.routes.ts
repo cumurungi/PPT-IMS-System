@@ -106,10 +106,6 @@ router.get('/stats', requireRole('ADMIN'), async (_req: Request, res: Response, 
 // GET /api/v1/users/permissions — available permissions for assignment
 router.get('/permissions', requireRole('ADMIN'), (_req: Request, res: Response) => {
   const permissions = [
-    // Task Management — note: tasks.create removed per request
-    { id: 'tasks.edit', label: 'Edit Any Task', group: 'Tasks' },
-    { id: 'tasks.delete', label: 'Delete Tasks', group: 'Tasks' },
-    { id: 'tasks.assign', label: 'Assign Tasks to Others', group: 'Tasks' },
     // Projects
     { id: 'projects.create', label: 'Create Projects', group: 'Projects' },
     { id: 'projects.edit', label: 'Edit Projects', group: 'Projects' },
