@@ -72,7 +72,7 @@
           <div class="col-span-2">Actions</div>
         </div>
         <div v-for="sermon in paginatedItems" :key="sermon.id"
-          class="grid grid-cols-12 gap-2 px-4 py-3 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750 cursor-pointer transition-colors items-center"
+          class="grid grid-cols-12 gap-2 px-4 py-3 border-b border-gray-100 dark:border-gray-700 hover:bg-indigo-50 dark:hover:bg-gray-700 cursor-pointer transition-colors items-center"
           @click="openDetail(sermon)">
           <div class="col-span-3">
             <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{{ sermon.title }}</p>
@@ -149,7 +149,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import api from '@/api/axios';
 import EventStatusBadge from '@/components/evangelism/EventStatusBadge.vue';
 import CreateEventModal from '@/components/evangelism/CreateEventModal.vue';
@@ -168,6 +169,19 @@ const filterSeries = ref('');
 const showCreate = ref(false);
 const selectedSermon = ref<any>(null);
 const viewMode = ref<'list' | 'board'>('list');
+const route = useRoute();
+
+onMounted(() => {
+  if (route.query.search) {
+    search.value = String(route.query.search);
+  }
+});
+
+watch(() => route.query.search, (newSearch) => {
+  if (newSearch) {
+    search.value = String(newSearch);
+  }
+});
 
 const statCards = [
   { key: 'total', label: 'Total', color: 'text-gray-900 dark:text-gray-100' },
