@@ -85,10 +85,11 @@
         </div>
         <div class="flex items-center gap-3">
           <!-- Global search -->
-          <div class="relative hidden sm:block">
+          <div ref="searchContainer" data-search-container class="relative hidden sm:block">
             <input
               v-model="globalSearch"
               @keyup.enter="performSearch"
+              @input="onSearchInput"
               type="text"
               placeholder="Search..."
               class="w-48 lg:w-64 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none pl-8"
@@ -96,6 +97,15 @@
             <svg class="absolute left-2.5 top-2 h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
+            <!-- Search results dropdown -->
+            <div v-if="showSearchDropdown && searchResults.length > 0" class="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto">
+              <div v-for="group in searchResults" :key="group.type" class="p-2">
+                <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1 px-2">{{ group.type }}</p>
+                <div v-for="item in group.items.slice(0, 5)" :key="item.id" @click.stop="goToSearchResult(item)" class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                  <span class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ item.title }}</span>
+                </div>
+              </div>
+            </div>
           </div>
           <!-- Theme toggle -->
           <button
@@ -138,12 +148,71 @@ const unreadNotifCount = ref(0);
 const unreadMsgCount = ref(0);
 const sidebarOpen = ref(false);
 const globalSearch = ref('');
-function performSearch() {
-  if (globalSearch.value.trim()) {
-    router.push({ path: '/tasks', query: { search: globalSearch.value.trim() } });
+const searchResults = ref<any[]>([]);
+const showSearchDropdown = ref(false);
+
+function onSearchInput() {
+  showSearchDropdown.value = false;
+}
+
+async function performSearch() {
+  if (!globalSearch.value.trim()) return;
+  const q = globalSearch.value.trim();
+  
+  const results: any[] = [];
+  
+  // Search tasks (accessible to all authenticated users)
+  try {
+    const { data } = await api.get('/tasks', { params: { search: q, limit: 5 } });
+    if (data.length) results.push({ type: 'Tasks', items: data.map((t: any) => ({ id: t.id, title: t.title, route: '/tasks', query: { search: q } })) });
+  } catch {}
+  
+  // Search sermons (EVANGELISM department or ADMIN)
+  if (auth.isAdmin || auth.user?.department === 'EVANGELISM') {
+    try {
+      const { data } = await api.get('/evangelism/sermons', { params: { search: q, limit: 5 } });
+      if (data.length) results.push({ type: 'Sermons', items: data.map((s: any) => ({ id: s.id, title: s.title, route: '/evangelism', query: { search: q } })) });
+    } catch {}
+  }
+  
+  // Search recordings (MEDIA department or ADMIN)
+  if (auth.isAdmin || auth.user?.department === 'MEDIA') {
+    try {
+      const { data } = await api.get('/media/recordings', { params: { search: q, limit: 5 } });
+      if (data.length) results.push({ type: 'Recordings', items: data.map((r: any) => ({ id: r.id, title: r.title, route: '/media', query: { search: q } })) });
+    } catch {}
+  }
+  
+  searchResults.value = results;
+  showSearchDropdown.value = results.length > 0;
+  
+  if (results.length === 0) {
+    router.push({ path: '/tasks', query: { search: q } });
     globalSearch.value = '';
   }
 }
+
+function goToSearchResult(item: any) {
+  showSearchDropdown.value = false;
+  globalSearch.value = '';
+  router.push({ path: item.route, query: item.query });
+}
+
+// Close dropdown when clicking outside search container
+function handleClickOutside(e: MouseEvent) {
+  const target = e.target as HTMLElement;
+  if (!target.closest('[data-search-container]')) {
+    showSearchDropdown.value = false;
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside);
+});
 
 // Fetch unread notification count on mount and poll every 30s
 async function fetchUnreadCount() {
