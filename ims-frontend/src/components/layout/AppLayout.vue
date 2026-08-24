@@ -5,8 +5,13 @@
     <aside :class="['w-64 bg-indigo-900 dark:bg-gray-800 text-white flex flex-col flex-shrink-0 fixed lg:relative inset-y-0 left-0 z-50 transform transition-transform lg:translate-x-0', sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0']">
       <!-- Branding -->
       <div class="px-6 py-5 border-b border-indigo-700 dark:border-gray-700">
-        <h1 class="text-xl font-bold">PPT IMS</h1>
-        <p class="text-xs text-indigo-300 dark:text-gray-400 mt-0.5">Integrated Management System</p>
+        <div class="flex items-center gap-3">
+          <img src="/logo.png" alt="PPT Logo" class="w-9 h-9 object-contain rounded-lg bg-white/10 p-1" />
+          <div>
+            <h1 class="text-xl font-bold">PPT IMS</h1>
+            <p class="text-xs text-indigo-300 dark:text-gray-400 mt-0.5">Integrated Management System</p>
+          </div>
+        </div>
       </div>
 
       <!-- Nav links -->
