@@ -65,8 +65,21 @@
 
         <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 sm:p-10">
           <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Welcome back</h2>
-          <p class="text-sm text-gray-500 dark:text-gray-400 mb-8">Sign in to your account</p>
-          <form @submit.prevent="handleLogin" class="space-y-4">
+          <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">Sign in to your account</p>
+          
+          <!-- Already logged in banner -->
+          <div v-if="auth.isAuthenticated" class="mb-4 p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-lg flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-green-800 dark:text-green-300">You are already signed in as <span class="font-semibold">{{ auth.user?.name }}</span></p>
+              <p class="text-xs text-green-600 dark:text-green-400">{{ auth.user?.email }}</p>
+            </div>
+            <div class="flex gap-2">
+              <button @click="continueToDashboard" class="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700">Continue</button>
+              <button @click="logout" class="text-xs border border-green-300 text-green-700 dark:text-green-300 px-3 py-1.5 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/40">Sign out</button>
+            </div>
+          </div>
+
+          <form v-else @submit.prevent="handleLogin" class="space-y-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
               <input v-model="form.email" type="email" required
@@ -146,6 +159,14 @@ async function handleLogin() {
   } catch (e: any) {
     error.value = e.response?.data?.message || 'Login failed';
   }
+}
+
+function continueToDashboard() {
+  router.push('/dashboard');
+}
+
+function logout() {
+  auth.logout();
 }
 
 async function requestReset() {
