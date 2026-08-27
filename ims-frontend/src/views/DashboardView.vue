@@ -175,6 +175,9 @@
       <div class="grid grid-cols-1 gap-4">
         <DepartmentChart v-if="stats.admin.departments" :departments="stats.admin.departments" />
       </div>
+
+      <!-- Predictive Insights -->
+      <PredictionsView />
     </template>
   </div>
 </template>
@@ -186,6 +189,7 @@ import { useAuthStore } from '@/stores/auth.store';
 import api from '@/api/axios';
 import StatCard from '@/components/dashboard/StatCard.vue';
 import DepartmentChart from '@/components/dashboard/DepartmentChart.vue';
+import PredictionsView from '@/components/dashboard/PredictionsView.vue';
 
 const auth = useAuthStore();
 const stats = ref<any>(null);

@@ -170,4 +170,78 @@ router.get('/stats', async (req: Request, res: Response, next: NextFunction) => 
   }
 });
 
+// GET /api/v1/dashboard/predictions
+router.get('/predictions', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = req.user!;
+    const isAdmin = user.role === 'ADMIN';
+    const isManager = user.role === 'MANAGER';
+    const dept = user.department;
+
+    const predictions: any = { generatedAt: new Date().toISOString() };
+
+    // Task completion prediction (all roles)
+    const totalTasks = await prisma.task.count();
+    const completedTasks = await prisma.task.count({ where: { status: 'COMPLETED' } });
+    const overdueTasks = await prisma.task.count({ where: { status: { not: 'COMPLETED' }, deadline: { lt: new Date() } } });
+    const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    predictions.tasks = {
+      completionRate,
+      overdueRisk: totalTasks > 0 ? Math.round((overdueTasks / totalTasks) * 100) : 0,
+      insight: completionRate >= 80 ? 'On track' : completionRate >= 60 ? 'Needs attention' : 'At risk',
+    };
+
+    // Department-specific predictions
+    if (isAdmin || dept === 'MEDIA') {
+      const totalRecordings = await prisma.recording.count();
+      const pendingApproval = await prisma.recording.count({ where: { status: 'EDITED' } });
+      const published = await prisma.recording.count({ where: { status: 'PUBLISHED' } });
+      const editingRate = totalRecordings > 0 ? Math.round((pendingApproval / totalRecordings) * 100) : 0;
+      predictions.media = {
+        editingBacklog: pendingApproval,
+        publishedRate: totalRecordings > 0 ? Math.round((published / totalRecordings) * 100) : 0,
+        insight: editingRate > 40 ? 'Editing backlog is growing' : 'Editing workflow is healthy',
+      };
+    }
+
+    if (isAdmin || dept === 'EVANGELISM') {
+      const totalEvents = await prisma.event.count();
+      const completedEvents = await prisma.event.count({ where: { status: 'COMPLETED' } });
+      const upcomingEvents = await prisma.event.count({ where: { status: { in: ['PLANNED', 'CONFIRMED'] } } });
+      const completionRate = totalEvents > 0 ? Math.round((completedEvents / totalEvents) * 100) : 0;
+      predictions.evangelism = {
+        upcomingEvents,
+        completionRate,
+        insight: completionRate >= 70 ? 'Schedule is on track' : 'Many events are pending completion',
+      };
+    }
+
+    if (isAdmin || dept === 'IT') {
+      const openTickets = await prisma.supportTicket.count({ where: { status: { in: ['OPEN', 'IN_PROGRESS'] } } });
+      const closedTickets = await prisma.supportTicket.count({ where: { status: 'CLOSED' } });
+      const totalTickets = openTickets + closedTickets;
+      const resolutionRate = totalTickets > 0 ? Math.round((closedTickets / totalTickets) * 100) : 0;
+      predictions.it = {
+        openTickets,
+        resolutionRate,
+        insight: openTickets > 10 ? 'Ticket backlog is high' : 'Support load is manageable',
+      };
+    }
+
+    if (isAdmin || dept === 'HR_FINANCE') {
+      const pendingLeave = await prisma.leaveRequest.count({ where: { status: 'PENDING' } });
+      const pendingExpenses = await prisma.expenseRequest.count({ where: { status: 'PENDING' } });
+      predictions.hr = {
+        pendingLeave,
+        pendingExpenses,
+        insight: pendingLeave + pendingExpenses > 10 ? 'Approval queue is backlogged' : 'Approvals are up to date',
+      };
+    }
+
+    res.json(predictions);
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;
