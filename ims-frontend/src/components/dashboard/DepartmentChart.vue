@@ -17,9 +17,10 @@ import {
   ArcElement,
   Tooltip,
   Legend,
+  DoughnutController,
 } from 'chart.js';
 
-Chart.register(ArcElement, Tooltip, Legend);
+Chart.register(ArcElement, DoughnutController, Tooltip, Legend);
 
 const props = defineProps<{
   departments: Array<{
