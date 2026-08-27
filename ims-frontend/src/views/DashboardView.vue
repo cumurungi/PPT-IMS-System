@@ -28,10 +28,10 @@
     <template v-else-if="stats">
       <!-- Personal Stats (all users see this) -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon="🔔" label="Notifications" :value="stats.personal.unreadNotifications" color="yellow" />
-        <StatCard v-if="stats.media" icon="🎬" label="Recordings" :value="stats.media.recordings" color="purple" />
-        <StatCard v-if="stats.it" icon="🎫" label="Open Tickets" :value="stats.it.openTickets" color="orange" />
-        <StatCard v-if="stats.hr" icon="🏖️" label="Pending Leave" :value="stats.hr.pendingLeave" color="blue" />
+        <StatCard icon="🔔" label="Notifications" :value="stats.personal.unreadNotifications" color="yellow" to="/notifications" />
+        <StatCard v-if="stats.media" icon="🎬" label="Recordings" :value="stats.media.recordings" color="purple" to="/media" />
+        <StatCard v-if="stats.it" icon="🎫" label="Open Tickets" :value="stats.it.openTickets" color="orange" to="/it" />
+        <StatCard v-if="stats.hr" icon="🏖️" label="Pending Leave" :value="stats.hr.pendingLeave" color="blue" to="/hr" />
       </div>
 
       <!-- ADMIN DASHBOARD -->
@@ -40,11 +40,11 @@
         <div>
           <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Organization Overview</h2>
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            <StatCard icon="👥" label="Total Users" :value="stats.admin.totalUsers" color="purple" />
-            <StatCard icon="📁" label="Active Projects" :value="stats.admin.totalProjects" color="blue" />
-            <StatCard icon="🏖️" label="Pending Leave" :value="stats.admin.pendingLeave" color="yellow" />
-            <StatCard icon="💰" label="Pending Expenses" :value="stats.admin.pendingExpenses" color="green" />
-            <StatCard icon="🎫" label="Open Tickets" :value="stats.admin.openTickets" color="orange" />
+            <StatCard icon="👥" label="Total Users" :value="stats.admin.totalUsers" color="purple" to="/admin/users" />
+            <StatCard icon="📁" label="Active Projects" :value="stats.admin.totalProjects" color="blue" to="/projects" />
+            <StatCard icon="🏖️" label="Pending Leave" :value="stats.admin.pendingLeave" color="yellow" to="/hr" />
+            <StatCard icon="💰" label="Pending Expenses" :value="stats.admin.pendingExpenses" color="green" to="/hr" />
+            <StatCard icon="🎫" label="Open Tickets" :value="stats.admin.openTickets" color="orange" to="/it" />
           </div>
         </div>
 
@@ -106,10 +106,10 @@
             {{ formatDepartment(stats.manager.department) }} Department
           </h2>
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard icon="👥" label="Team Members" :value="stats.manager.teamMembers" color="purple" />
-            <StatCard icon="📁" label="Projects" :value="stats.manager.projects" color="blue" />
-            <StatCard icon="📊" label="Completion" :value="stats.manager.completionRate + '%'" color="green" />
-            <StatCard icon="📋" label="Pending Approvals" :value="stats.manager.pendingApprovals" color="orange" />
+            <StatCard icon="👥" label="Team Members" :value="stats.manager.teamMembers" color="purple" to="/admin/users" />
+            <StatCard icon="📁" label="Projects" :value="stats.manager.projects" color="blue" to="/projects" />
+            <StatCard icon="📊" label="Completion" :value="stats.manager.completionRate + '%'" color="green" to="/projects" />
+            <StatCard icon="📋" label="Pending Approvals" :value="stats.manager.pendingApprovals" color="orange" to="/media" />
           </div>
         </div>
       </template>
