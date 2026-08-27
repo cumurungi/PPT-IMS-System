@@ -48,29 +48,9 @@
           </div>
         </div>
 
-        <!-- Pending Actions -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-            <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Pending Actions</h3>
-            <div class="space-y-1">
-              <PendingItem label="Leave Requests" :count="stats.admin.pendingLeave" icon="🏖️" to="/hr" />
-              <PendingItem label="Expense Approvals" :count="stats.admin.pendingExpenses" icon="💰" to="/hr" />
-              <PendingItem v-if="stats.media" label="Content Approvals" :count="stats.media.pendingApproval" icon="🎬" to="/media" />
-              <PendingItem v-if="stats.it" label="Critical Tickets" :count="stats.it.criticalTickets" icon="🚨" to="/it" />
-            </div>
-          </div>
-
-          <!-- Department Breakdown -->
-          <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 lg:col-span-2">
-            <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Departments</h3>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <DeptCard
-                v-for="d in stats.admin.departments"
-                :key="d.department"
-                :dept="d"
-              />
-            </div>
-          </div>
+        <!-- Department Performance -->
+        <div class="grid grid-cols-1 gap-4">
+          <DepartmentChart v-if="stats.admin.departments" :departments="stats.admin.departments" />
         </div>
 
         <!-- Recent Activity -->
@@ -240,8 +220,7 @@ import { RouterLink } from 'vue-router';
 import { useAuthStore } from '@/stores/auth.store';
 import api from '@/api/axios';
 import StatCard from '@/components/dashboard/StatCard.vue';
-import PendingItem from '@/components/dashboard/PendingItem.vue';
-import DeptCard from '@/components/dashboard/DeptCard.vue';
+import DepartmentChart from '@/components/dashboard/DepartmentChart.vue';
 
 const auth = useAuthStore();
 const stats = ref<any>(null);
