@@ -48,11 +48,6 @@
           </div>
         </div>
 
-        <!-- Department Performance -->
-        <div class="grid grid-cols-1 gap-4">
-          <DepartmentChart v-if="stats.admin.departments" :departments="stats.admin.departments" />
-        </div>
-
         <!-- Recent Activity -->
         <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
           <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Recent Activity</h3>
@@ -175,6 +170,11 @@
           </div>
         </div>
       </template>
+
+      <!-- Department Performance -->
+      <div class="grid grid-cols-1 gap-4">
+        <DepartmentChart v-if="stats.admin.departments" :departments="stats.admin.departments" />
+      </div>
     </template>
   </div>
 </template>

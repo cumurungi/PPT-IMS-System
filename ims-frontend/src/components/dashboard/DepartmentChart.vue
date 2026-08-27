@@ -1,5 +1,5 @@
 <template>
-  <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 lg:col-span-2">
+  <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
     <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">Department Performance</h3>
     <div class="relative h-64">
       <canvas ref="chartRef"></canvas>
@@ -9,7 +9,16 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue';
-import { Chart } from 'chart.js';
+import {
+  Chart,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Legend,
+  Tooltip,
+} from 'chart.js';
+
+Chart.register(CategoryScale, LinearScale, BarElement, Legend, Tooltip);
 
 const props = defineProps<{
   departments: Array<{
