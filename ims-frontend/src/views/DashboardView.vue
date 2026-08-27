@@ -175,41 +175,6 @@
           </div>
         </div>
       </template>
-
-      <!-- Quick Actions (role-aware) -->
-      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-        <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Quick Actions</h3>
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <RouterLink to="/notifications" class="flex flex-col items-center gap-2 p-4 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors">
-            <span class="text-2xl">🔔</span>
-            <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Notifications</span>
-          </RouterLink>
-          <RouterLink to="/projects" class="flex flex-col items-center gap-2 p-4 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors">
-            <span class="text-2xl">📁</span>
-            <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Projects</span>
-          </RouterLink>
-          <RouterLink to="/messages" class="flex flex-col items-center gap-2 p-4 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors">
-            <span class="text-2xl">💬</span>
-            <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Messages</span>
-          </RouterLink>
-          <RouterLink v-if="auth.user?.department === 'MEDIA' || auth.user?.role === 'ADMIN'" to="/media" class="flex flex-col items-center gap-2 p-4 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors">
-            <span class="text-2xl">🎥</span>
-            <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Recordings</span>
-          </RouterLink>
-          <RouterLink v-if="auth.user?.department === 'EVANGELISM' || auth.user?.role === 'ADMIN'" to="/evangelism" class="flex flex-col items-center gap-2 p-4 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors">
-            <span class="text-2xl">📖</span>
-            <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Schedule Sermon</span>
-          </RouterLink>
-          <RouterLink v-if="auth.user?.department !== 'MEDIA' && auth.user?.department !== 'EVANGELISM'" to="/it" class="flex flex-col items-center gap-2 p-4 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors">
-            <span class="text-2xl">🎫</span>
-            <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Support Ticket</span>
-          </RouterLink>
-          <RouterLink to="/reports" class="flex flex-col items-center gap-2 p-4 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors">
-            <span class="text-2xl">📊</span>
-            <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Reports</span>
-          </RouterLink>
-        </div>
-      </div>
     </template>
   </div>
 </template>
