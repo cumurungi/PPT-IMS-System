@@ -252,7 +252,7 @@
 
       <!-- Department Performance -->
       <div class="grid grid-cols-1 gap-4">
-        <DepartmentChart v-if="stats.admin?.departments" :departments="stats.admin.departments" />
+        <DepartmentChart v-if="adminDepartments.length > 0" :departments="adminDepartments" />
       </div>
 
       <!-- Predictive Insights -->
@@ -262,7 +262,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { RouterLink } from 'vue-router';
 import { useAuthStore } from '@/stores/auth.store';
 import api from '@/api/axios';
@@ -274,13 +274,14 @@ const auth = useAuthStore();
 const stats = ref<any>(null);
 const loading = ref(true);
 const loadError = ref('');
+const adminDepartments = computed(() => stats.value?.admin?.departments ?? []);
 
 async function loadDashboard() {
   loading.value = true;
   loadError.value = '';
   try {
     const { data } = await api.get('/dashboard/stats');
-    stats.value = data;
+    stats.value = data && typeof data === 'object' ? data : null;
   } catch (err) {
     console.error('Failed to load dashboard stats:', err);
     stats.value = null;
