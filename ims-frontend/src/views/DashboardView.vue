@@ -25,6 +25,17 @@
       <div class="animate-spin rounded-full h-10 w-10 border-4 border-indigo-500 border-t-transparent"></div>
     </div>
 
+    <div v-else-if="loadError" class="bg-white dark:bg-gray-800 rounded-xl border border-red-200 dark:border-red-900/60 p-6 text-center">
+      <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">Dashboard could not load</h2>
+      <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">{{ loadError }}</p>
+      <button
+        class="mt-4 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors"
+        @click="loadDashboard"
+      >
+        Try again
+      </button>
+    </div>
+
     <template v-else-if="stats">
       <!-- Personal Stats (all users see this) -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -85,6 +96,74 @@
             <StatCard icon="📁" label="Projects" :value="stats.manager.projects" color="blue" to="/projects" />
             <StatCard icon="📊" label="Completion" :value="stats.manager.completionRate + '%'" color="green" to="/projects" />
             <StatCard icon="📋" label="Pending Approvals" :value="stats.manager.pendingApprovals" color="orange" to="/media" />
+          </div>
+        </div>
+      </template>
+
+      <!-- DEPARTMENT DASHBOARD -->
+      <template v-if="stats.departmentOverview">
+        <div>
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
+            {{ formatDepartment(stats.departmentOverview.department) }} Department Overview
+          </h2>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <StatCard icon="👥" label="Team Members" :value="stats.departmentOverview.teamMembers" color="purple" to="/projects" />
+            <StatCard icon="📁" label="Projects" :value="stats.departmentOverview.projects" color="blue" to="/projects" />
+            <StatCard icon="📋" label="Tasks" :value="stats.departmentOverview.totalTasks" color="yellow" to="/projects" />
+            <StatCard icon="✅" label="Completed" :value="stats.departmentOverview.completedTasks" color="green" to="/projects" />
+            <StatCard icon="📊" label="Completion" :value="stats.departmentOverview.completionRate + '%'" color="orange" to="/projects" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Recent Department Projects</h3>
+              <RouterLink to="/projects" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline">View all</RouterLink>
+            </div>
+            <div v-if="stats.departmentOverview.recentProjects.length === 0" class="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">
+              No department projects yet
+            </div>
+            <div v-else class="space-y-2">
+              <RouterLink
+                v-for="project in stats.departmentOverview.recentProjects"
+                :key="project.id"
+                to="/projects"
+                class="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/40 rounded-lg px-2 transition-colors"
+              >
+                <div class="min-w-0">
+                  <p class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{{ project.name }}</p>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">{{ project._count?.tasks ?? 0 }} tasks</p>
+                </div>
+                <span class="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">{{ formatDate(project.deadline) }}</span>
+              </RouterLink>
+            </div>
+          </div>
+
+          <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Recent Department Tasks</h3>
+              <RouterLink to="/projects" class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline">View all</RouterLink>
+            </div>
+            <div v-if="stats.departmentOverview.recentTasks.length === 0" class="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">
+              No department tasks yet
+            </div>
+            <div v-else class="space-y-2">
+              <RouterLink
+                v-for="task in stats.departmentOverview.recentTasks"
+                :key="task.id"
+                to="/projects"
+                class="flex items-center justify-between gap-3 py-2 border-b border-gray-100 dark:border-gray-700 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/40 rounded-lg px-2 transition-colors"
+              >
+                <div class="min-w-0">
+                  <p class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{{ task.title }}</p>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 truncate">
+                    {{ task.project?.name || 'No project' }} · {{ task.assignee?.name || 'Unassigned' }}
+                  </p>
+                </div>
+                <span class="text-xs font-medium text-gray-500 dark:text-gray-400 flex-shrink-0">{{ formatStatus(task.status) }}</span>
+              </RouterLink>
+            </div>
           </div>
         </div>
       </template>
@@ -173,7 +252,7 @@
 
       <!-- Department Performance -->
       <div class="grid grid-cols-1 gap-4">
-        <DepartmentChart v-if="stats.admin.departments" :departments="stats.admin.departments" />
+        <DepartmentChart v-if="stats.admin?.departments" :departments="stats.admin.departments" />
       </div>
 
       <!-- Predictive Insights -->
@@ -194,17 +273,24 @@ import PredictionsView from '@/components/dashboard/PredictionsView.vue';
 const auth = useAuthStore();
 const stats = ref<any>(null);
 const loading = ref(true);
+const loadError = ref('');
 
-onMounted(async () => {
+async function loadDashboard() {
+  loading.value = true;
+  loadError.value = '';
   try {
     const { data } = await api.get('/dashboard/stats');
     stats.value = data;
   } catch (err) {
     console.error('Failed to load dashboard stats:', err);
+    stats.value = null;
+    loadError.value = 'Please check your connection and try again. If this continues, the server may be temporarily unavailable.';
   } finally {
     loading.value = false;
   }
-});
+}
+
+onMounted(loadDashboard);
 
 function formatDepartment(dept: string) {
   const map: Record<string, string> = {
@@ -235,5 +321,20 @@ function timeAgo(date: string) {
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
   return `${Math.floor(seconds / 86400)}d ago`;
+}
+
+function formatStatus(status: string) {
+  const map: Record<string, string> = {
+    TODO: 'To do',
+    IN_PROGRESS: 'In progress',
+    IN_REVIEW: 'In review',
+    COMPLETED: 'Completed',
+    BLOCKED: 'Blocked',
+  };
+  return map[status] || status;
+}
+
+function formatDate(date: string) {
+  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(date));
 }
 </script>

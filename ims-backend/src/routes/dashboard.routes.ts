@@ -128,6 +128,71 @@ router.get('/stats', async (req: Request, res: Response, next: NextFunction) => 
       };
     }
 
+    // Department users see what's happening in their own department.
+    if (!isAdmin && dept) {
+      const departmentTaskWhere: any = {
+        OR: [
+          { project: { department: dept as any } },
+          { projectId: null, assignee: { department: dept as any } },
+        ],
+      };
+
+      const [
+        teamMembers,
+        projects,
+        totalTasks,
+        completedTasks,
+        inProgressTasks,
+        overdueTasks,
+        recentProjects,
+        recentTasks,
+      ] = await Promise.all([
+        prisma.user.count({ where: { department: dept as any, isActive: true } }),
+        prisma.project.count({ where: { department: dept as any, isActive: true } }),
+        prisma.task.count({ where: departmentTaskWhere }),
+        prisma.task.count({ where: { ...departmentTaskWhere, status: 'COMPLETED' } }),
+        prisma.task.count({ where: { ...departmentTaskWhere, status: 'IN_PROGRESS' } }),
+        prisma.task.count({ where: { ...departmentTaskWhere, status: { not: 'COMPLETED' }, deadline: { lt: new Date() } } }),
+        prisma.project.findMany({
+          where: { department: dept as any, isActive: true },
+          orderBy: { updatedAt: 'desc' },
+          take: 5,
+          select: {
+            id: true,
+            name: true,
+            deadline: true,
+            _count: { select: { tasks: true } },
+          },
+        }),
+        prisma.task.findMany({
+          where: departmentTaskWhere,
+          orderBy: { updatedAt: 'desc' },
+          take: 5,
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            deadline: true,
+            assignee: { select: { name: true } },
+            project: { select: { name: true } },
+          },
+        }),
+      ]);
+
+      stats.departmentOverview = {
+        department: dept,
+        teamMembers,
+        projects,
+        totalTasks,
+        completedTasks,
+        inProgressTasks,
+        overdueTasks,
+        completionRate: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0,
+        recentProjects,
+        recentTasks,
+      };
+    }
+
     // Department-specific modules
     if (isAdmin || dept === 'MEDIA') {
       const [recordings, pendingApproval, published] = await Promise.all([
