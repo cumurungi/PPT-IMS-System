@@ -1,128 +1,212 @@
 <template>
   <div class="h-full flex flex-col">
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-4 flex-shrink-0">
+    <div class="flex flex-wrap items-start justify-between gap-4 mb-4 flex-shrink-0">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Media Library</h1>
-        <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Browse, search and organize media assets</p>
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Sermon List</h1>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+          Shared sermon production list for Evangelism and IT
+        </p>
       </div>
-      <label class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 cursor-pointer transition-colors">
-        <span>+</span> Upload Asset
-        <input type="file" class="hidden" accept="video/*,audio/*,image/*,.pdf,.doc,.docx" @change="handleUpload" />
-      </label>
+      <button
+        class="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+        @click="openCreate"
+      >
+        Add Sermon
+      </button>
     </div>
 
-    <!-- Filter -->
-    <div class="flex items-center gap-3 mb-4 flex-shrink-0">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4 flex-shrink-0">
+      <MiniStat label="Total" :value="stats.total" />
+      <MiniStat label="Rendered" :value="stats.rendered" color="green" />
+      <MiniStat label="YouTube" :value="stats.youtube" color="red" />
+      <MiniStat label="Website" :value="stats.website" color="blue" />
+    </div>
+
+    <div class="flex flex-wrap items-center gap-3 mb-4 flex-shrink-0">
       <input
         v-model="searchQuery"
         type="text"
-        placeholder="Search by title..."
-        class="border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm w-56 focus:ring-2 focus:ring-indigo-500 outline-none"
+        placeholder="Search title, serie, preacher, language..."
+        class="border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm w-72 focus:ring-2 focus:ring-indigo-500 outline-none"
+      />
+      <input
+        v-model="filterLanguage"
+        type="text"
+        placeholder="Language"
+        class="border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm w-40 focus:ring-2 focus:ring-indigo-500 outline-none"
       />
       <select
-        v-model="filterCategory"
+        v-model="filterRendered"
         class="border border-gray-200 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
       >
-        <option value="">All Categories</option>
-        <option value="Video">Video</option>
-        <option value="Audio">Audio</option>
-        <option value="Image">Image</option>
-        <option value="Document">Document</option>
-        <option value="Other">Other</option>
+        <option value="">Rendered: all</option>
+        <option value="true">Rendered</option>
+        <option value="false">Not rendered</option>
       </select>
       <DateFilter v-model:month="filterMonth" v-model:year="filterYear" />
     </div>
 
-    <!-- Upload progress -->
-    <div v-if="uploading" class="mb-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-3 flex items-center gap-2 text-sm text-indigo-700 dark:text-indigo-300">
-      <div class="animate-spin rounded-full h-4 w-4 border-2 border-indigo-500 border-t-transparent"></div>
-      Uploading {{ uploadProgress }}%...
-    </div>
-
-    <div v-if="uploadError" class="mb-4 bg-red-50 dark:bg-red-900/20 rounded-lg p-3 text-sm text-red-700 dark:text-red-300">
-      {{ uploadError }}
-    </div>
-
-    <!-- Loading -->
     <div v-if="loading" class="flex-1 flex items-center justify-center">
       <div class="animate-spin rounded-full h-10 w-10 border-4 border-indigo-500 border-t-transparent"></div>
     </div>
 
-    <!-- Asset grid -->
-    <div v-else class="flex-1 overflow-y-auto">
-      <div v-if="paginatedItems.length === 0" class="text-center py-16 text-gray-400 dark:text-gray-500">
-        <p class="text-4xl mb-3">🗃️</p>
-        <p class="text-sm">No media assets yet. Upload one to get started.</p>
-      </div>
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-        <div
-          v-for="asset in paginatedItems"
-          :key="asset.id"
-          class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-shadow group"
-        >
-          <!-- Preview -->
-          <div class="aspect-video bg-gray-100 dark:bg-gray-700 flex items-center justify-center relative">
-            <span class="text-4xl">{{ categoryIcon(asset.category) }}</span>
-            <button
-              @click="deleteAsset(asset.id)"
-              class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 bg-red-500 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs transition-opacity"
-              title="Delete"
-            >🗑️</button>
-          </div>
-          <!-- Info -->
-          <div class="p-3">
-            <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{{ asset.title }}</p>
-            <p class="text-xs text-gray-500 dark:text-gray-400">{{ asset.category }} · {{ formatSize(asset.fileSizeBytes) }}</p>
-            <div v-if="asset.tags?.length" class="flex flex-wrap gap-1 mt-2">
-              <span v-for="tag in asset.tags.slice(0, 3)" :key="tag"
-                class="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded">
-                {{ tag }}
-              </span>
-            </div>
-          </div>
-        </div>
+    <div v-else-if="paginatedItems.length === 0" class="flex-1 flex flex-col items-center justify-center text-gray-400 dark:text-gray-500">
+      <p class="text-sm">No sermons found.</p>
+    </div>
+
+    <div v-else class="flex-1 overflow-auto -mx-6 px-6">
+      <div class="min-w-[1180px] bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-gray-50 dark:bg-gray-700/60 text-gray-600 dark:text-gray-300">
+            <tr>
+              <th class="px-4 py-3 font-semibold">Title</th>
+              <th class="px-4 py-3 font-semibold">Serie</th>
+              <th class="px-4 py-3 font-semibold">Preacher</th>
+              <th class="px-4 py-3 font-semibold">Language</th>
+              <th class="px-4 py-3 font-semibold">Shooting</th>
+              <th class="px-4 py-3 font-semibold">Editing</th>
+              <th class="px-4 py-3 font-semibold">Storage</th>
+              <th class="px-4 py-3 font-semibold text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+            <tr v-for="sermon in paginatedItems" :key="sermon.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+              <td class="px-4 py-3 align-top">
+                <p class="font-medium text-gray-900 dark:text-gray-100 truncate max-w-[220px]">{{ sermon.title }}</p>
+                <p v-if="sermon.event?.title" class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{{ sermon.event.title }}</p>
+              </td>
+              <td class="px-4 py-3 align-top text-gray-700 dark:text-gray-200">{{ sermon.series || '-' }}</td>
+              <td class="px-4 py-3 align-top text-gray-700 dark:text-gray-200">{{ sermon.preacher || '-' }}</td>
+              <td class="px-4 py-3 align-top text-gray-700 dark:text-gray-200">{{ sermon.language || '-' }}</td>
+              <td class="px-4 py-3 align-top">
+                <p class="text-gray-700 dark:text-gray-200">{{ formatDate(sermon.recordingDate) }}</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Camera: {{ sermon.cameraman || sermon.recordingAssignee?.name || '-' }}</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Storage: {{ sermon.shootingStorage || sermon.storageLocation || '-' }}</p>
+              </td>
+              <td class="px-4 py-3 align-top">
+                <p class="text-gray-700 dark:text-gray-200">Editor: {{ sermon.editor?.name || '-' }}</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Reviser: {{ sermon.reviser || '-' }}</p>
+                <span :class="['inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-xs font-medium', sermon.rendered ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300']">
+                  {{ sermon.rendered ? 'Rendered' : 'Not rendered' }}
+                </span>
+              </td>
+              <td class="px-4 py-3 align-top">
+                <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                  <a :class="storageClass(sermon.youtubeUrl)" :href="sermon.youtubeUrl || undefined" target="_blank">YouTube</a>
+                  <a :class="storageClass(sermon.cloudUrl)" :href="sermon.cloudUrl || undefined" target="_blank">Cloud</a>
+                  <a :class="storageClass(sermon.appUrl)" :href="sermon.appUrl || undefined" target="_blank">App</a>
+                  <a :class="storageClass(sermon.websiteUrl)" :href="sermon.websiteUrl || undefined" target="_blank">Website</a>
+                </div>
+              </td>
+              <td class="px-4 py-3 align-top">
+                <div class="flex justify-end gap-2">
+                  <button class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline" @click="openEdit(sermon)">Edit</button>
+                  <button class="text-xs font-medium text-red-600 dark:text-red-400 hover:underline" @click="deleteSermon(sermon)">Delete</button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
       <Pagination :page="page" :page-size="12" :total="total" @change="setPage" />
     </div>
 
-    <!-- Asset metadata modal (after upload) -->
-    <div v-if="pendingUpload" class="fixed inset-0 z-50 flex items-center justify-center" @click.self="pendingUpload = null">
-      <div class="absolute inset-0 bg-black/30"></div>
-      <div class="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
-        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Asset Details</h2>
+    <div v-if="showForm" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div class="w-full max-w-4xl max-h-[90vh] overflow-auto rounded-lg bg-white dark:bg-gray-800 shadow-xl">
+        <div class="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-5 py-4">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ editingId ? 'Edit Sermon' : 'Add Sermon' }}</h2>
+          <button class="text-gray-500 hover:text-gray-900 dark:hover:text-gray-100" @click="closeForm">Close</button>
         </div>
-        <form @submit.prevent="saveAsset" class="px-6 py-5 space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title *</label>
-            <input v-model="assetForm.title" type="text" required
-              class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+
+        <form class="p-5 space-y-5" @submit.prevent="saveSermon">
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <label class="text-sm">
+              <span class="block text-gray-600 dark:text-gray-300 mb-1">Title</span>
+              <input v-model="form.title" required class="form-input" />
+            </label>
+            <label class="text-sm">
+              <span class="block text-gray-600 dark:text-gray-300 mb-1">Serie</span>
+              <input v-model="form.series" class="form-input" />
+            </label>
+            <label class="text-sm">
+              <span class="block text-gray-600 dark:text-gray-300 mb-1">Preacher</span>
+              <input v-model="form.preacher" class="form-input" />
+            </label>
+            <label class="text-sm">
+              <span class="block text-gray-600 dark:text-gray-300 mb-1">Language</span>
+              <input v-model="form.language" class="form-input" />
+            </label>
           </div>
+
           <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category *</label>
-            <select v-model="assetForm.category" required
-              class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
-              <option value="">Select</option>
-              <option value="Video">Video</option>
-              <option value="Audio">Audio</option>
-              <option value="Image">Image</option>
-              <option value="Document">Document</option>
-              <option value="Other">Other</option>
-            </select>
+            <h3 class="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Shooting</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <label class="text-sm">
+                <span class="block text-gray-600 dark:text-gray-300 mb-1">Date</span>
+                <input v-model="form.recordingDate" type="date" required class="form-input" />
+              </label>
+              <label class="text-sm">
+                <span class="block text-gray-600 dark:text-gray-300 mb-1">Cameraman</span>
+                <input v-model="form.cameraman" class="form-input" />
+              </label>
+              <label class="text-sm">
+                <span class="block text-gray-600 dark:text-gray-300 mb-1">Storage</span>
+                <input v-model="form.shootingStorage" class="form-input" />
+              </label>
+            </div>
           </div>
+
           <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tags (comma separated)</label>
-            <input v-model="tagsInput" type="text"
-              class="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-              placeholder="e.g., sermon, 2024, sunday" />
+            <h3 class="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Editing</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <label class="text-sm">
+                <span class="block text-gray-600 dark:text-gray-300 mb-1">Editor</span>
+                <select v-model="form.editorId" class="form-input">
+                  <option value="">Not assigned</option>
+                  <option v-for="user in users" :key="user.id" :value="user.id">{{ user.name }}</option>
+                </select>
+              </label>
+              <label class="text-sm">
+                <span class="block text-gray-600 dark:text-gray-300 mb-1">Reviser</span>
+                <input v-model="form.reviser" class="form-input" />
+              </label>
+              <label class="flex items-end gap-2 text-sm text-gray-700 dark:text-gray-200">
+                <input v-model="form.rendered" type="checkbox" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                <span class="pb-2">Rendered</span>
+              </label>
+            </div>
           </div>
-          <div class="flex justify-end gap-3 pt-2">
-            <button type="button" @click="pendingUpload = null"
-              class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">Cancel</button>
-            <button type="submit" :disabled="saving"
-              class="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium">
-              {{ saving ? 'Saving...' : 'Save Asset' }}
+
+          <div>
+            <h3 class="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Storage</h3>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <label class="text-sm">
+                <span class="block text-gray-600 dark:text-gray-300 mb-1">YouTube</span>
+                <input v-model="form.youtubeUrl" class="form-input" />
+              </label>
+              <label class="text-sm">
+                <span class="block text-gray-600 dark:text-gray-300 mb-1">Cloud</span>
+                <input v-model="form.cloudUrl" class="form-input" />
+              </label>
+              <label class="text-sm">
+                <span class="block text-gray-600 dark:text-gray-300 mb-1">App</span>
+                <input v-model="form.appUrl" class="form-input" />
+              </label>
+              <label class="text-sm">
+                <span class="block text-gray-600 dark:text-gray-300 mb-1">Website</span>
+                <input v-model="form.websiteUrl" class="form-input" />
+              </label>
+            </div>
+          </div>
+
+          <p v-if="formError" class="text-sm text-red-600 dark:text-red-400">{{ formError }}</p>
+
+          <div class="flex justify-end gap-3 border-t border-gray-200 dark:border-gray-700 pt-4">
+            <button type="button" class="rounded-lg px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700" @click="closeForm">
+              Cancel
+            </button>
+            <button type="submit" :disabled="saving" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60">
+              {{ saving ? 'Saving...' : 'Save' }}
             </button>
           </div>
         </form>
@@ -134,132 +218,230 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import api from '@/api/axios';
+import MiniStat from '@/components/tasks/MiniStat.vue';
 import Pagination from '@/components/shared/Pagination.vue';
 import DateFilter from '@/components/shared/DateFilter.vue';
 import { usePagination } from '@/composables/usePagination';
 
-const assets = ref<any[]>([]);
-const loading = ref(true);
-const searchQuery = ref('');
-const filterCategory = ref('');
-const uploading = ref(false);
-const uploadProgress = ref(0);
-const uploadError = ref('');
-const pendingUpload = ref<any>(null);
-const assetForm = ref({ title: '', category: '' });
-const tagsInput = ref('');
-const saving = ref(false);
+type SermonForm = {
+  title: string;
+  series: string;
+  preacher: string;
+  language: string;
+  recordingDate: string;
+  cameraman: string;
+  shootingStorage: string;
+  editorId: string;
+  reviser: string;
+  rendered: boolean;
+  youtubeUrl: string;
+  cloudUrl: string;
+  appUrl: string;
+  websiteUrl: string;
+};
 
-const filteredAssets = computed(() => {
-  let result = assets.value;
+const sermons = ref<any[]>([]);
+const users = ref<any[]>([]);
+const loading = ref(true);
+const saving = ref(false);
+const showForm = ref(false);
+const editingId = ref<string | null>(null);
+const formError = ref('');
+const searchQuery = ref('');
+const filterRendered = ref('');
+const filterLanguage = ref('');
+
+const emptyForm = (): SermonForm => ({
+  title: '',
+  series: '',
+  preacher: '',
+  language: '',
+  recordingDate: new Date().toISOString().slice(0, 10),
+  cameraman: '',
+  shootingStorage: '',
+  editorId: '',
+  reviser: '',
+  rendered: false,
+  youtubeUrl: '',
+  cloudUrl: '',
+  appUrl: '',
+  websiteUrl: '',
+});
+
+const form = ref<SermonForm>(emptyForm());
+
+const filteredSermons = computed(() => {
+  let result = sermons.value;
   if (searchQuery.value) {
-    const q = searchQuery.value.toLowerCase();
-    result = result.filter(a => a.title.toLowerCase().includes(q));
+    const query = searchQuery.value.toLowerCase();
+    result = result.filter((sermon) =>
+      [
+        sermon.title,
+        sermon.series,
+        sermon.preacher,
+        sermon.language,
+        sermon.cameraman,
+        sermon.shootingStorage,
+        sermon.editor?.name,
+        sermon.reviser,
+        sermon.youtubeUrl,
+        sermon.cloudUrl,
+        sermon.appUrl,
+        sermon.websiteUrl,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query)),
+    );
   }
-  if (filterCategory.value) {
-    result = result.filter(a => a.category === filterCategory.value);
+  if (filterLanguage.value) {
+    const language = filterLanguage.value.toLowerCase();
+    result = result.filter((sermon) => String(sermon.language || '').toLowerCase().includes(language));
   }
+  if (filterRendered.value !== '') result = result.filter((sermon) => String(sermon.rendered) === filterRendered.value);
   return result;
 });
 
-const { page, filterMonth, filterYear, total, paginatedItems, setPage } = usePagination(() => filteredAssets.value, 12);
+const stats = computed(() => ({
+  total: filteredSermons.value.length,
+  rendered: filteredSermons.value.filter((sermon) => sermon.rendered).length,
+  youtube: filteredSermons.value.filter((sermon) => sermon.youtubeUrl).length,
+  website: filteredSermons.value.filter((sermon) => sermon.websiteUrl).length,
+}));
 
-function categoryIcon(category: string) {
-  const map: Record<string, string> = {
-    Video: '🎬', Audio: '🎵', Image: '🖼️', Document: '📄', Other: '📦',
+const { page, filterMonth, filterYear, total, paginatedItems, setPage } = usePagination(() => filteredSermons.value, 12);
+
+function storageClass(value: string | null | undefined) {
+  return value
+    ? 'font-medium text-indigo-600 dark:text-indigo-400 hover:underline'
+    : 'text-gray-400 dark:text-gray-500 pointer-events-none';
+}
+
+function formatDate(value: string) {
+  if (!value) return '-';
+  return new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function toDateInput(value: string) {
+  if (!value) return new Date().toISOString().slice(0, 10);
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+function openCreate() {
+  editingId.value = null;
+  form.value = emptyForm();
+  formError.value = '';
+  showForm.value = true;
+}
+
+function openEdit(sermon: any) {
+  editingId.value = sermon.id;
+  form.value = {
+    title: sermon.title || '',
+    series: sermon.series || '',
+    preacher: sermon.preacher || '',
+    language: sermon.language || '',
+    recordingDate: toDateInput(sermon.recordingDate),
+    cameraman: sermon.cameraman || sermon.recordingAssignee?.name || '',
+    shootingStorage: sermon.shootingStorage || sermon.storageLocation || '',
+    editorId: sermon.editorId || sermon.editor?.id || '',
+    reviser: sermon.reviser || '',
+    rendered: Boolean(sermon.rendered),
+    youtubeUrl: sermon.youtubeUrl || '',
+    cloudUrl: sermon.cloudUrl || '',
+    appUrl: sermon.appUrl || '',
+    websiteUrl: sermon.websiteUrl || '',
   };
-  return map[category] || '📦';
+  formError.value = '';
+  showForm.value = true;
 }
 
-function formatSize(bytes: number | string) {
-  const b = typeof bytes === 'string' ? parseInt(bytes) : bytes;
-  if (b < 1024) return b + ' B';
-  if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
-  if (b < 1024 * 1024 * 1024) return (b / (1024 * 1024)).toFixed(1) + ' MB';
-  return (b / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+function closeForm() {
+  showForm.value = false;
+  formError.value = '';
 }
 
-async function handleUpload(event: Event) {
-  const input = event.target as HTMLInputElement;
-  if (!input.files?.length) return;
-  const file = input.files[0];
-
-  uploading.value = true;
-  uploadProgress.value = 0;
-  uploadError.value = '';
-
-  const formData = new FormData();
-  formData.append('file', file);
-
+async function fetchSermons() {
+  loading.value = true;
   try {
-    const { data } = await api.post('/upload/media-asset', formData, {
-      onUploadProgress: (e) => {
-        if (e.total) uploadProgress.value = Math.round((e.loaded / e.total) * 100);
-      },
-    });
-    // Open metadata modal
-    pendingUpload.value = data;
-    assetForm.value.title = data.fileName.replace(/\.[^/.]+$/, '');
-    assetForm.value.category = guessCategory(data.mimeType);
+    const { data } = await api.get('/media/files');
+    sermons.value = data;
   } catch (err) {
-    console.error('Upload failed:', err);
-    const error = err as any;
-    uploadError.value = error?.response?.data?.message || error?.response?.data?.error || 'Upload failed. Please try again.';
-  } finally {
-    uploading.value = false;
-    input.value = '';
-  }
-}
-
-function guessCategory(mimeType: string) {
-  if (mimeType?.startsWith('video/')) return 'Video';
-  if (mimeType?.startsWith('audio/')) return 'Audio';
-  if (mimeType?.startsWith('image/')) return 'Image';
-  if (mimeType?.includes('pdf') || mimeType?.includes('document')) return 'Document';
-  return 'Other';
-}
-
-async function saveAsset() {
-  saving.value = true;
-  try {
-    await api.post('/media/assets', {
-      title: assetForm.value.title,
-      category: assetForm.value.category,
-      fileUrl: pendingUpload.value.fileUrl,
-      fileType: pendingUpload.value.mimeType || 'application/octet-stream',
-      fileSizeBytes: pendingUpload.value.fileSizeBytes,
-      tags: tagsInput.value.split(',').map(t => t.trim()).filter(Boolean),
-    });
-    pendingUpload.value = null;
-    assetForm.value = { title: '', category: '' };
-    tagsInput.value = '';
-    await fetchAssets();
-  } catch (err) {
-    console.error('Failed to save asset:', err);
-  } finally {
-    saving.value = false;
-  }
-}
-
-async function deleteAsset(id: string) {
-  try {
-    await api.delete(`/media/assets/${id}`);
-    await fetchAssets();
-  } catch (err) {
-    console.error('Failed to delete asset:', err);
-  }
-}
-
-async function fetchAssets() {
-  try {
-    const { data } = await api.get('/media/assets');
-    assets.value = data;
-  } catch (err) {
-    console.error('Failed to load assets:', err);
+    console.error('Failed to load sermons:', err);
   } finally {
     loading.value = false;
   }
 }
 
-onMounted(fetchAssets);
+async function fetchUsers() {
+  try {
+    const { data } = await api.get('/users', { params: { limit: 200 } });
+    users.value = Array.isArray(data) ? data : data.users || [];
+  } catch {
+    users.value = [];
+  }
+}
+
+async function saveSermon() {
+  saving.value = true;
+  formError.value = '';
+  try {
+    const payload = {
+      ...form.value,
+      storageLocation: form.value.shootingStorage,
+      durationSeconds: 0,
+      format: 'MP4',
+    };
+
+    if (editingId.value) {
+      await api.patch(`/media/files/${editingId.value}`, payload);
+    } else {
+      await api.post('/media/files', payload);
+    }
+    closeForm();
+    await fetchSermons();
+  } catch (err: any) {
+    formError.value = err?.response?.data?.message || 'Could not save sermon.';
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function deleteSermon(sermon: any) {
+  if (!confirm(`Delete "${sermon.title}"?`)) return;
+  try {
+    await api.delete(`/media/files/${sermon.id}`);
+    await fetchSermons();
+  } catch (err: any) {
+    alert(err?.response?.data?.message || 'Could not delete sermon.');
+  }
+}
+
+onMounted(() => {
+  fetchSermons();
+  fetchUsers();
+});
 </script>
+
+<style scoped>
+.form-input {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(229 231 235);
+  background: white;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: rgb(17 24 39);
+  outline: none;
+}
+
+.form-input:focus {
+  border-color: rgb(99 102 241);
+  box-shadow: 0 0 0 2px rgb(99 102 241 / 0.25);
+}
+
+:global(.dark) .form-input {
+  border-color: rgb(75 85 99);
+  background: rgb(31 41 55);
+  color: rgb(243 244 246);
+}
+</style>

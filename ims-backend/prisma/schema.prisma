@@ -351,6 +351,9 @@ model TaskAttachment {
 model Recording {
   id                   String          @id @default(cuid())
   title                String
+  series               String?
+  preacher             String?
+  language             String?
   eventId              String?
   event                Event?          @relation(fields: [eventId], references: [id])
   mediaRequestId       String?         @unique
@@ -368,6 +371,16 @@ model Recording {
   recordingAssignee    User?           @relation("RecordingAssignee", fields: [recordingAssigneeId], references: [id])
   editedVideoUrl       String?
   approvalVideoSource  String?
+  storageLocation      String?
+  cameraman            String?
+  shootingStorage      String?
+  reviser              String?
+  youtubeUrl           String?
+  cloudUrl             String?
+  appUrl               String?
+  websiteUrl           String?
+  rendered             Boolean        @default(false)
+  renderedAt           DateTime?
   createdById          String
   createdBy            User            @relation("RecordingCreator", fields: [createdById], references: [id])
   createdAt            DateTime        @default(now())
@@ -383,6 +396,12 @@ model Recording {
   @@index([recordingAssigneeId])
   @@index([editedVideoUrl])
   @@index([approvalVideoSource])
+  @@index([storageLocation])
+  @@index([preacher])
+  @@index([cameraman])
+  @@index([language])
+  @@index([rendered])
+  @@index([renderedAt])
 }
 
 model MediaAsset {

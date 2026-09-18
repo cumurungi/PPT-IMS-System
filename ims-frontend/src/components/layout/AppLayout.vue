@@ -175,13 +175,11 @@ async function performSearch() {
     } catch {}
   }
   
-  // Search recordings (MEDIA department or ADMIN)
-  if (auth.isAdmin || auth.user?.department === 'MEDIA') {
-    try {
-      const { data } = await api.get('/media/recordings', { params: { search: q, limit: 5 } });
-      if (data.length) results.push({ type: 'Recordings', items: data.map((r: any) => ({ id: r.id, title: r.title, route: '/media', query: { search: q } })) });
-    } catch {}
-  }
+  // Search recordings (accessible to all authenticated users)
+  try {
+    const { data } = await api.get('/media/files', { params: { search: q, limit: 5 } });
+    if (data.length) results.push({ type: 'Sermons', items: data.map((r: any) => ({ id: r.id, title: r.title, route: '/recorded-files', query: { search: q } })) });
+  } catch {}
   
   searchResults.value = results;
   showSearchDropdown.value = results.length > 0;
@@ -284,6 +282,7 @@ const allLinks: NavLink[] = [
   { to: '/notifications', icon: '🔔', label: 'Notifications', section: 'general' },
   { to: '/messages',      icon: '💬', label: 'Messages', section: 'general' },
   { to: '/reports',       icon: '📊', label: 'Reports', section: 'general' },
+  { to: '/recorded-files', icon: '🎞️', label: 'Sermons', depts: ['EVANGELISM', 'IT'], section: 'general' },
 
   // ── Department-specific
   { to: '/it',            icon: '🎫', label: 'IT', section: 'department' },
@@ -327,6 +326,7 @@ const currentPageTitle = computed(() => {
     '/notifications':     'Notifications',
     '/messages':          'Messages',
     '/reports':           'Reports',
+    '/recorded-files':    'Sermons',
     '/media':             'Media Department',
     '/evangelism':        'Evangelism Department',
     '/hr':                'HR / Finance Department',

@@ -20,6 +20,12 @@ const router = createRouter({
           component: () => import('@/views/MediaView.vue'),
           meta: { department: 'MEDIA' }
         },
+        {
+          path: 'recorded-files',
+          name: 'recorded-files',
+          component: () => import('@/views/media/MediaLibraryView.vue'),
+          meta: { departments: ['EVANGELISM', 'IT'] },
+        },
         { path: 'evangelism', name: 'evangelism', component: () => import('@/views/EvangelismView.vue') },
         { path: 'hr', name: 'hr', component: () => import('@/views/HRView.vue') },
         { path: 'it', name: 'it', component: () => import('@/views/ITView.vue') },
@@ -43,6 +49,10 @@ router.beforeEach(async (to) => {
     if (!auth.token) return { name: 'login' };
     await auth.fetchMe();
     if (!auth.isAuthenticated) return { name: 'login' };
+  }
+  const departments = to.meta.departments as string[] | undefined;
+  if (departments && auth.user?.role !== 'ADMIN' && !departments.includes(auth.user?.department)) {
+    return { name: 'dashboard' };
   }
   return true;
 });

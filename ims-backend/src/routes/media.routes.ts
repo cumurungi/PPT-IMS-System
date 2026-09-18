@@ -8,9 +8,9 @@ const router = Router();
 router.use(authenticate);
 
 // Most media routes are restricted to MEDIA department + ADMIN
-// Assets routes (library) are accessible to all authenticated users so any
-// department can save/view uploaded media assets.
+// The sermon list is shared by Evangelism and IT for production and publishing.
 const mediaOnly = requireDepartment('MEDIA');
+const sermonLibraryAccess = requireDepartment('EVANGELISM', 'IT');
 
 // Valid status transitions for the recording workflow
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
@@ -25,13 +25,32 @@ const ALLOWED_TRANSITIONS: Record<string, string[]> = {
 
 const createRecordingSchema = z.object({
   title: z.string().min(1),
+  series: z.string().optional(),
+  preacher: z.string().optional(),
+  language: z.string().optional(),
   eventId: z.string().optional(),
   recordingDate: z.string(),
-  durationSeconds: z.number().int().nonnegative(),
-  format: z.string().min(1),
+  durationSeconds: z.number().int().nonnegative().optional(),
+  format: z.string().min(1).optional(),
   recordingAssigneeId: z.string().optional(),
+  cameraman: z.string().optional(),
   editorId: z.string().optional(),
+  reviser: z.string().optional(),
+  storageLocation: z.string().optional(),
+  shootingStorage: z.string().optional(),
+  youtubeUrl: z.string().optional(),
+  cloudUrl: z.string().optional(),
+  appUrl: z.string().optional(),
+  websiteUrl: z.string().optional(),
+  rendered: z.boolean().optional(),
+  renderedAt: z.string().optional(),
 });
+
+const updateSermonSchema = createRecordingSchema.partial();
+
+function cleanText(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
 
 // GET /api/v1/media/recordings
 router.get('/recordings', mediaOnly, async (req: Request, res: Response, next: NextFunction) => {
@@ -71,6 +90,177 @@ router.get('/recordings', mediaOnly, async (req: Request, res: Response, next: N
       },
     });
     res.json(recordings);
+  } catch (err) { next(err); }
+});
+
+router.get('/files', sermonLibraryAccess, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { status, search, rendered, storageLocation, limit } = req.query;
+    const where: any = {};
+
+    if (status) where.status = status as string;
+    if (rendered === 'true') where.rendered = true;
+    if (rendered === 'false') where.rendered = false;
+    if (storageLocation) where.storageLocation = { contains: storageLocation as string, mode: 'insensitive' as const };
+    if (search) {
+      const query = search as string;
+      where.OR = [
+        { title: { contains: query, mode: 'insensitive' as const } },
+        { series: { contains: query, mode: 'insensitive' as const } },
+        { preacher: { contains: query, mode: 'insensitive' as const } },
+        { language: { contains: query, mode: 'insensitive' as const } },
+        { event: { title: { contains: query, mode: 'insensitive' as const } } },
+        { editor: { name: { contains: query, mode: 'insensitive' as const } } },
+        { recordingAssignee: { name: { contains: query, mode: 'insensitive' as const } } },
+        { storageLocation: { contains: query, mode: 'insensitive' as const } },
+        { cameraman: { contains: query, mode: 'insensitive' as const } },
+        { shootingStorage: { contains: query, mode: 'insensitive' as const } },
+        { reviser: { contains: query, mode: 'insensitive' as const } },
+      ];
+    }
+
+    const parsedLimit = Number(limit);
+    const take = Number.isInteger(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : undefined;
+    const origin = `${req.protocol}://${req.get('host') || 'localhost:3001'}`;
+    const normalizeFileUrl = (url: string | null | undefined) => {
+      if (!url) return null;
+      if (/^https?:\/\//i.test(url)) return url;
+      return `${origin}${url.startsWith('/') ? url : `/${url}`}`;
+    };
+
+    const recordings = await prisma.recording.findMany({
+      where,
+      take,
+      orderBy: { recordingDate: 'desc' },
+      include: {
+        event: { select: { id: true, title: true, date: true, location: true } },
+        editor: { select: { id: true, name: true } },
+        recordingAssignee: { select: { id: true, name: true } },
+        createdBy: { select: { id: true, name: true } },
+        assets: {
+          select: {
+            id: true,
+            title: true,
+            fileUrl: true,
+            fileType: true,
+            fileSizeBytes: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    const result = recordings.map((recording) => ({
+      ...recording,
+      assets: recording.assets.map((asset) => ({
+        ...asset,
+        fileSizeBytes: asset.fileSizeBytes.toString(),
+      })),
+      fileUrl: normalizeFileUrl(recording.editedVideoUrl || recording.assets[0]?.fileUrl),
+      fileName: recording.editedVideoUrl ? recording.title : recording.assets[0]?.title || null,
+    }));
+
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+router.post('/files', sermonLibraryAccess, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = createRecordingSchema.parse(req.body);
+    const recording = await prisma.recording.create({
+      data: {
+        title: data.title.trim(),
+        series: cleanText(data.series),
+        preacher: cleanText(data.preacher),
+        language: cleanText(data.language),
+        eventId: data.eventId || null,
+        recordingDate: new Date(data.recordingDate),
+        durationSeconds: data.durationSeconds ?? 0,
+        format: data.format?.trim() || 'MP4',
+        status: 'CAPTURED',
+        storageLocation: cleanText(data.storageLocation),
+        shootingStorage: cleanText(data.shootingStorage),
+        rendered: data.rendered || false,
+        renderedAt: data.rendered ? (data.renderedAt ? new Date(data.renderedAt) : new Date()) : null,
+        createdById: req.user!.id,
+        recordingAssigneeId: data.recordingAssigneeId || null,
+        cameraman: cleanText(data.cameraman),
+        editorId: data.editorId || null,
+        reviser: cleanText(data.reviser),
+        youtubeUrl: cleanText(data.youtubeUrl),
+        cloudUrl: cleanText(data.cloudUrl),
+        appUrl: cleanText(data.appUrl),
+        websiteUrl: cleanText(data.websiteUrl),
+      },
+      include: {
+        editor: { select: { id: true, name: true } },
+        recordingAssignee: { select: { id: true, name: true } },
+        createdBy: { select: { id: true, name: true } },
+      },
+    });
+    res.status(201).json(recording);
+  } catch (err) { next(err); }
+});
+
+router.patch('/files/:id', sermonLibraryAccess, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = updateSermonSchema.parse(req.body);
+    const updates: any = {};
+
+    if (data.title !== undefined) updates.title = data.title.trim();
+    if (data.series !== undefined) updates.series = cleanText(data.series);
+    if (data.preacher !== undefined) updates.preacher = cleanText(data.preacher);
+    if (data.language !== undefined) updates.language = cleanText(data.language);
+    if (data.eventId !== undefined) updates.eventId = data.eventId || null;
+    if (data.recordingDate !== undefined) updates.recordingDate = new Date(data.recordingDate);
+    if (data.durationSeconds !== undefined) updates.durationSeconds = data.durationSeconds;
+    if (data.format !== undefined) updates.format = data.format?.trim() || 'MP4';
+    if (data.recordingAssigneeId !== undefined) updates.recordingAssigneeId = data.recordingAssigneeId || null;
+    if (data.cameraman !== undefined) updates.cameraman = cleanText(data.cameraman);
+    if (data.editorId !== undefined) updates.editorId = data.editorId || null;
+    if (data.reviser !== undefined) updates.reviser = cleanText(data.reviser);
+    if (data.storageLocation !== undefined) updates.storageLocation = cleanText(data.storageLocation);
+    if (data.shootingStorage !== undefined) updates.shootingStorage = cleanText(data.shootingStorage);
+    if (data.youtubeUrl !== undefined) updates.youtubeUrl = cleanText(data.youtubeUrl);
+    if (data.cloudUrl !== undefined) updates.cloudUrl = cleanText(data.cloudUrl);
+    if (data.appUrl !== undefined) updates.appUrl = cleanText(data.appUrl);
+    if (data.websiteUrl !== undefined) updates.websiteUrl = cleanText(data.websiteUrl);
+    if (data.rendered !== undefined) {
+      updates.rendered = data.rendered;
+      updates.renderedAt = data.rendered ? (data.renderedAt ? new Date(data.renderedAt) : new Date()) : null;
+    } else if (data.renderedAt !== undefined) {
+      updates.renderedAt = data.renderedAt ? new Date(data.renderedAt) : null;
+    }
+
+    const recording = await prisma.recording.update({
+      where: { id: req.params.id },
+      data: updates,
+      include: {
+        editor: { select: { id: true, name: true } },
+        recordingAssignee: { select: { id: true, name: true } },
+        createdBy: { select: { id: true, name: true } },
+      },
+    });
+    res.json(recording);
+  } catch (err) { next(err); }
+});
+
+router.delete('/files/:id', sermonLibraryAccess, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const queue = await prisma.publishingQueue.findUnique({
+      where: { recordingId: req.params.id },
+      select: { id: true },
+    });
+
+    await prisma.$transaction([
+      ...(queue ? [prisma.publishingQueuePlatform.deleteMany({ where: { queueId: queue.id } })] : []),
+      prisma.publishingQueue.deleteMany({ where: { recordingId: req.params.id } }),
+      prisma.contentApproval.deleteMany({ where: { recordingId: req.params.id } }),
+      prisma.mediaAsset.updateMany({ where: { recordingId: req.params.id }, data: { recordingId: null } }),
+      prisma.recording.delete({ where: { id: req.params.id } }),
+    ]);
+
+    res.status(204).send();
   } catch (err) { next(err); }
 });
 
@@ -138,9 +328,12 @@ router.post('/recordings', mediaOnly, async (req: Request, res: Response, next: 
         title: data.title,
         eventId: data.eventId || null,
         recordingDate: new Date(data.recordingDate),
-        durationSeconds: data.durationSeconds,
-        format: data.format,
+        durationSeconds: data.durationSeconds ?? 0,
+        format: data.format?.trim() || 'MP4',
         status: 'CAPTURED',
+        storageLocation: data.storageLocation?.trim() || null,
+        rendered: data.rendered || false,
+        renderedAt: data.rendered ? (data.renderedAt ? new Date(data.renderedAt) : new Date()) : null,
         createdById: req.user!.id,
         recordingAssigneeId: data.recordingAssigneeId || null,
         editorId: data.editorId || null,
@@ -196,6 +389,15 @@ router.patch('/recordings/:id', mediaOnly, async (req: Request, res: Response, n
     if (req.body.recordingAssigneeId !== undefined) updates.recordingAssigneeId = req.body.recordingAssigneeId || null;
     if (req.body.editedVideoUrl !== undefined) updates.editedVideoUrl = req.body.editedVideoUrl || null;
     if (req.body.approvalVideoSource !== undefined) updates.approvalVideoSource = req.body.approvalVideoSource || null;
+    if (req.body.storageLocation !== undefined) updates.storageLocation = req.body.storageLocation || null;
+    if (req.body.rendered !== undefined) {
+      const rendered = req.body.rendered === true || req.body.rendered === 'true';
+      updates.rendered = rendered;
+      updates.renderedAt = rendered ? (current.renderedAt || new Date()) : null;
+    }
+    if (req.body.renderedAt !== undefined && updates.rendered !== false) {
+      updates.renderedAt = req.body.renderedAt ? new Date(req.body.renderedAt) : null;
+    }
     if (req.body.title) updates.title = req.body.title;
     if (req.body.format) updates.format = req.body.format;
 

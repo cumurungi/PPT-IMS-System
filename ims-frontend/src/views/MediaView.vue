@@ -2,7 +2,7 @@
   <div class="h-full flex flex-col">
     <div class="mb-6">
       <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Media Department</h1>
-      <p class="text-gray-500 dark:text-gray-400 mt-1">Manage media library, recordings, and coverage requests</p>
+      <p class="text-gray-500 dark:text-gray-400 mt-1">Manage coverage requests and editing workflows</p>
     </div>
 
     <div class="flex gap-4 mb-6 border-b border-gray-200 dark:border-gray-700">
@@ -27,10 +27,7 @@
     </div>
 
     <div class="flex-1 overflow-hidden">
-      <div v-if="activeTab === 'library'" class="h-full">
-        <MediaLibraryView />
-      </div>
-      <div v-else-if="activeTab === 'recordings'" class="h-full">
+      <div v-if="activeTab === 'recordings'" class="h-full">
         <RecordingsView />
       </div>
       <div v-else-if="activeTab === 'requests'" class="h-full">
@@ -47,19 +44,17 @@
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import api from '@/api/axios';
-import MediaLibraryView from './media/MediaLibraryView.vue';
 import RecordingsView from './media/RecordingsView.vue';
 import MediaRequestsView from './media/MediaRequestsView.vue';
 import EditingView from './media/EditingView.vue';
 
-type TabId = 'library' | 'recordings' | 'requests' | 'editing';
+type TabId = 'recordings' | 'requests' | 'editing';
 
-const activeTab = ref<TabId>('library');
+const activeTab = ref<TabId>('recordings');
 const pendingRequestsCount = ref(0);
 const route = useRoute();
 
 const mediaTabs: Array<{ id: TabId; label: string }> = [
-  { id: 'library', label: 'Media Library' },
   { id: 'recordings', label: 'Recordings' },
   { id: 'requests', label: '📬 Coverage Requests' },
   { id: 'editing', label: '✂️ Editing' },
