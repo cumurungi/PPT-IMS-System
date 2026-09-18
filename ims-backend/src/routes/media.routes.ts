@@ -52,6 +52,14 @@ function cleanText(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+function sermonWorkflowStatus(recording: { status: string; rendered: boolean } | null, requestStatus?: string) {
+  if (!recording) return requestStatus === 'DECLINED' ? 'DECLINED' : 'WAITING_FOR_MEDIA';
+  if (recording.status === 'PUBLISHED') return 'PUBLISHED';
+  if (recording.rendered || recording.status === 'APPROVED' || recording.status === 'EDITED') return 'RENDERED';
+  if (recording.status === 'IN_EDITING') return 'EDITING';
+  return 'ASSIGNED';
+}
+
 // GET /api/v1/media/recordings
 router.get('/recordings', mediaOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -130,10 +138,10 @@ router.get('/files', sermonLibraryAccess, async (req: Request, res: Response, ne
 
     const recordings = await prisma.recording.findMany({
       where,
-      take,
       orderBy: { recordingDate: 'desc' },
       include: {
         event: { select: { id: true, title: true, date: true, location: true } },
+        mediaRequest: { select: { id: true, status: true, recordingType: true, requestedDate: true } },
         editor: { select: { id: true, name: true } },
         recordingAssignee: { select: { id: true, name: true } },
         createdBy: { select: { id: true, name: true } },
@@ -150,8 +158,11 @@ router.get('/files', sermonLibraryAccess, async (req: Request, res: Response, ne
       },
     });
 
-    const result = recordings.map((recording) => ({
+    const recordingResults = recordings.map((recording) => ({
       ...recording,
+      recordingId: recording.id,
+      source: 'RECORDING',
+      workflowStatus: sermonWorkflowStatus(recording, recording.mediaRequest?.status),
       assets: recording.assets.map((asset) => ({
         ...asset,
         fileSizeBytes: asset.fileSizeBytes.toString(),
@@ -159,6 +170,69 @@ router.get('/files', sermonLibraryAccess, async (req: Request, res: Response, ne
       fileUrl: normalizeFileUrl(recording.editedVideoUrl || recording.assets[0]?.fileUrl),
       fileName: recording.editedVideoUrl ? recording.title : recording.assets[0]?.title || null,
     }));
+
+    const eventWhere: any = {
+      recordings: { none: {} },
+      mediaRequests: { some: {} },
+    };
+    if (search) {
+      const query = search as string;
+      eventWhere.OR = [
+        { title: { contains: query, mode: 'insensitive' as const } },
+        { eventType: { contains: query, mode: 'insensitive' as const } },
+        { preachers: { some: { preacher: { name: { contains: query, mode: 'insensitive' as const } } } } },
+      ];
+    }
+
+    const pendingEvents = await prisma.event.findMany({
+      where: eventWhere,
+      orderBy: { date: 'desc' },
+      include: {
+        preachers: { include: { preacher: { select: { name: true } } } },
+        mediaRequests: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { id: true, status: true, recordingType: true, requestedDate: true },
+        },
+      },
+    });
+
+    const eventResults = pendingEvents.map((event) => {
+      const mediaRequest = event.mediaRequests[0];
+      return {
+        id: event.id,
+        recordingId: null,
+        source: 'EVENT',
+        title: event.title,
+        series: event.eventType,
+        preacher: event.preachers.map(({ preacher }) => preacher.name).join(', ') || null,
+        language: null,
+        eventId: event.id,
+        recordingDate: event.date,
+        durationSeconds: 0,
+        format: 'MP4',
+        status: null,
+        rendered: false,
+        renderedAt: null,
+        workflowStatus: sermonWorkflowStatus(null, mediaRequest.status),
+        mediaRequest,
+        event: { id: event.id, title: event.title, date: event.date, location: event.location },
+        editor: null,
+        recordingAssignee: null,
+        createdBy: null,
+        assets: [],
+        fileUrl: null,
+        fileName: null,
+        youtubeUrl: null,
+        cloudUrl: null,
+        appUrl: null,
+        websiteUrl: null,
+      };
+    });
+
+    const combinedResults = [...recordingResults, ...eventResults]
+      .sort((left, right) => new Date(right.recordingDate).getTime() - new Date(left.recordingDate).getTime());
+    const result = take ? combinedResults.slice(0, take) : combinedResults;
 
     res.json(result);
   } catch (err) { next(err); }

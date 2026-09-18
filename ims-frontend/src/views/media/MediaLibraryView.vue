@@ -80,8 +80,8 @@
               <td class="px-4 py-3 align-top">
                 <p class="text-gray-700 dark:text-gray-200">Editor: {{ sermon.editor?.name || '-' }}</p>
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Reviser: {{ sermon.reviser || '-' }}</p>
-                <span :class="['inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-xs font-medium', sermon.rendered ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300']">
-                  {{ sermon.rendered ? 'Rendered' : 'Not rendered' }}
+                <span :class="['inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-xs font-medium', workflowStatusClass(sermon.workflowStatus)]">
+                  {{ workflowStatusLabel(sermon.workflowStatus) }}
                 </span>
               </td>
               <td class="px-4 py-3 align-top">
@@ -93,9 +93,12 @@
                 </div>
               </td>
               <td class="px-4 py-3 align-top">
-                <div class="flex justify-end gap-2">
+                <div v-if="sermon.recordingId" class="flex justify-end gap-2">
                   <button class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline" @click="openEdit(sermon)">Edit</button>
                   <button class="text-xs font-medium text-red-600 dark:text-red-400 hover:underline" @click="deleteSermon(sermon)">Delete</button>
+                </div>
+                <div v-else class="text-right text-xs text-gray-400 dark:text-gray-500">
+                  Use Coverage Requests
                 </div>
               </td>
             </tr>
@@ -308,6 +311,27 @@ function storageClass(value: string | null | undefined) {
   return value
     ? 'font-medium text-indigo-600 dark:text-indigo-400 hover:underline'
     : 'text-gray-400 dark:text-gray-500 pointer-events-none';
+}
+
+function workflowStatusLabel(status: string | undefined) {
+  const labels: Record<string, string> = {
+    WAITING_FOR_MEDIA: 'Waiting for Media',
+    ASSIGNED: 'Assigned',
+    EDITING: 'Editing',
+    RENDERED: 'Rendered',
+    PUBLISHED: 'Published',
+    DECLINED: 'Declined',
+  };
+  return labels[status || ''] || 'Waiting for Media';
+}
+
+function workflowStatusClass(status: string | undefined) {
+  if (status === 'PUBLISHED') return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300';
+  if (status === 'RENDERED') return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300';
+  if (status === 'EDITING') return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300';
+  if (status === 'DECLINED') return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300';
+  if (status === 'ASSIGNED') return 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300';
+  return 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300';
 }
 
 function formatDate(value: string) {
