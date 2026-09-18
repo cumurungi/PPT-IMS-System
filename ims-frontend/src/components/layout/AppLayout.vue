@@ -282,7 +282,7 @@ const allLinks: NavLink[] = [
   { to: '/notifications', icon: '🔔', label: 'Notifications', section: 'general' },
   { to: '/messages',      icon: '💬', label: 'Messages', section: 'general' },
   { to: '/reports',       icon: '📊', label: 'Reports', section: 'general' },
-  { to: '/recorded-files', icon: '🎞️', label: 'Sermons', depts: ['EVANGELISM', 'IT'], section: 'general' },
+  { to: '/recorded-files', icon: '🎞️', label: 'Sermons', depts: ['MEDIA', 'EVANGELISM', 'IT'], section: 'general' },
 
   // ── Department-specific
   { to: '/it',            icon: '🎫', label: 'IT', section: 'department' },

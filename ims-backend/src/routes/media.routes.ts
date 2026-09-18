@@ -10,7 +10,7 @@ router.use(authenticate);
 // Most media routes are restricted to MEDIA department + ADMIN
 // The sermon list is shared by Evangelism and IT for production and publishing.
 const mediaOnly = requireDepartment('MEDIA');
-const sermonLibraryAccess = requireDepartment('EVANGELISM', 'IT');
+const sermonLibraryAccess = requireDepartment('MEDIA', 'EVANGELISM', 'IT');
 
 // Valid status transitions for the recording workflow
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {

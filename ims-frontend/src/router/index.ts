@@ -24,7 +24,7 @@ const router = createRouter({
           path: 'recorded-files',
           name: 'recorded-files',
           component: () => import('@/views/media/MediaLibraryView.vue'),
-          meta: { departments: ['EVANGELISM', 'IT'] },
+          meta: { departments: ['MEDIA', 'EVANGELISM', 'IT'] },
         },
         { path: 'evangelism', name: 'evangelism', component: () => import('@/views/EvangelismView.vue') },
         { path: 'hr', name: 'hr', component: () => import('@/views/HRView.vue') },
