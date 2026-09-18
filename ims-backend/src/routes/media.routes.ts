@@ -3,6 +3,7 @@ import { z } from 'zod';
 import prisma from '../lib/prisma';
 import { authenticate } from '../middleware/auth';
 import { requireDepartment } from '../middleware/rbac';
+import { notifyAllActiveUsers } from '../lib/notifications';
 
 const router = Router();
 router.use(authenticate);
@@ -272,6 +273,11 @@ router.post('/files', sermonLibraryAccess, async (req: Request, res: Response, n
         createdBy: { select: { id: true, name: true } },
       },
     });
+    await notifyAllActiveUsers({
+      title: 'Sermon recording added',
+      body: `"${recording.title}" was added to the shared Sermons list.`,
+      entityId: recording.eventId || recording.id,
+    }).catch(() => {});
     res.status(201).json(recording);
   } catch (err) { next(err); }
 });
@@ -315,12 +321,18 @@ router.patch('/files/:id', sermonLibraryAccess, async (req: Request, res: Respon
         createdBy: { select: { id: true, name: true } },
       },
     });
+    await notifyAllActiveUsers({
+      title: 'Sermon recording updated',
+      body: `"${recording.title}" was updated in the shared Sermons list.`,
+      entityId: recording.eventId || recording.id,
+    }).catch(() => {});
     res.json(recording);
   } catch (err) { next(err); }
 });
 
 router.delete('/files/:id', sermonLibraryAccess, async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const recording = await prisma.recording.findUnique({ where: { id: req.params.id }, select: { id: true, title: true, eventId: true } });
     const queue = await prisma.publishingQueue.findUnique({
       where: { recordingId: req.params.id },
       select: { id: true },
@@ -333,6 +345,14 @@ router.delete('/files/:id', sermonLibraryAccess, async (req: Request, res: Respo
       prisma.mediaAsset.updateMany({ where: { recordingId: req.params.id }, data: { recordingId: null } }),
       prisma.recording.delete({ where: { id: req.params.id } }),
     ]);
+
+    if (recording) {
+      await notifyAllActiveUsers({
+        title: 'Sermon recording removed',
+        body: `"${recording.title}" was removed from the shared Sermons list.`,
+        entityId: recording.eventId || recording.id,
+      }).catch(() => {});
+    }
 
     res.status(204).send();
   } catch (err) { next(err); }
@@ -504,6 +524,12 @@ router.patch('/recordings/:id', mediaOnly, async (req: Request, res: Response, n
       await notifyEditorAssignment(current, req.body.editorId, req.user!.name);
     }
 
+    await notifyAllActiveUsers({
+      title: 'Sermon workflow updated',
+      body: `"${recording.title}" was updated in the shared Sermons list.`,
+      entityId: current.eventId || recording.id,
+    }).catch(() => {});
+
     res.json(recording);
   } catch (err) { next(err); }
 });
@@ -584,6 +610,12 @@ router.post('/recordings/:id/start-editing', mediaOnly, async (req: Request, res
       console.error('[Auto-editing-task] Failed:', editingErr);
     }
 
+    await notifyAllActiveUsers({
+      title: 'Sermon moved to editing',
+      body: `"${current.event?.title || recording.id}" is now assigned for editing.`,
+      entityId: current.eventId || recording.id,
+    }).catch(() => {});
+
     // Notify the assigned editor
     await notifyEditorAssignment(current, editorId, req.user!.name);
 
@@ -633,6 +665,12 @@ router.post('/recordings/:id/send-for-approval', mediaOnly, async (req: Request,
     } catch (err) {
       console.error('[Media] Failed to send approval email notification:', err);
     }
+
+    await notifyAllActiveUsers({
+      title: 'Sermon ready for approval',
+      body: `"${current.title}" was rendered and is waiting for Evangelism approval.`,
+      entityId: current.eventId || current.id,
+    }).catch(() => {});
 
     res.json({ message: 'Sent to preacher for approval' });
   } catch (err) { next(err); }
@@ -720,6 +758,14 @@ router.post('/recordings/:id/approve', async (req: Request, res: Response, next:
         }
       } catch {}
     }
+
+    await notifyAllActiveUsers({
+      title: decision ? 'Sermon approved' : 'Sermon sent back for editing',
+      body: decision
+        ? `"${current.title}" was approved and is ready for IT publishing.`
+        : `"${current.title}" needs more editing.`,
+      entityId: current.eventId || current.id,
+    }).catch(() => {});
 
     res.json({ recording, message: decision ? 'Recording approved and queued for publishing' : 'Recording sent back for editing' });
   } catch (err) { next(err); }
@@ -897,6 +943,14 @@ router.patch('/requests/:id', mediaOnly, async (req: Request, res: Response, nex
         }
       }
     }
+
+    await notifyAllActiveUsers({
+      title: data.status === 'ACCEPTED' ? 'Sermon assigned to Media' : 'Sermon request declined',
+      body: data.status === 'ACCEPTED'
+        ? `"${mediaRequest.event.title}" was accepted by Media and added to the recording workflow.`
+        : `"${mediaRequest.event.title}" was declined by Media and needs attention.`,
+      entityId: mediaRequest.event.id,
+    }).catch(() => {});
 
     res.json(mediaRequest);
   } catch (err) { next(err); }

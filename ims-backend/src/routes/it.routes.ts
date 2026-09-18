@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
 import { authenticate } from '../middleware/auth';
 import { requireDepartment } from '../middleware/rbac';
+import { notifyAllActiveUsers } from '../lib/notifications';
 
 const router = Router();
 router.use(authenticate);
@@ -241,6 +242,14 @@ router.post('/queue/:id/publish', requireDepartment('IT'), async (req: Request, 
         where: { id: updated.recordingId },
         data: { status: 'PUBLISHED' },
       });
+    }
+
+    if (updated.recording) {
+      await notifyAllActiveUsers({
+        title: 'Sermon published',
+        body: `"${updated.recording.title}" was published by IT.`,
+        entityId: updated.recording.eventId || updated.recording.id,
+      }).catch(() => {});
     }
 
     res.json({ message: 'Published successfully', item: updated });

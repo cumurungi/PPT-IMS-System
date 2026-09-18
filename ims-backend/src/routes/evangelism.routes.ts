@@ -3,6 +3,7 @@ import { z } from 'zod';
 import prisma from '../lib/prisma';
 import { authenticate } from '../middleware/auth';
 import { requireDepartment } from '../middleware/rbac';
+import { notifyAllActiveUsers } from '../lib/notifications';
 
 const router = Router();
 router.use(authenticate);
@@ -133,6 +134,12 @@ router.post('/sermons', evangOnly, async (req: Request, res: Response, next: Nex
       },
     });
 
+    await notifyAllActiveUsers({
+      title: 'New sermon added',
+      body: `${data.title} was added to the shared Sermons list and is waiting for Media assignment.`,
+      entityId: sermon.id,
+    }).catch(() => {});
+
     // Notify Media Manager by email + notification
     try {
       const { sendEmail } = require('../lib/email');
@@ -142,9 +149,6 @@ router.post('/sermons', evangOnly, async (req: Request, res: Response, next: Nex
         select: { id: true, email: true, name: true },
       });
       if (mediaManager) {
-        await prisma.notification.create({
-          data: { userId: mediaManager.id, type: 'APPROVAL_REQUIRED', title: 'New sermon to record', body: `${requester?.name} scheduled "${data.title}" for ${data.scheduledDate.split('T')[0]}`, entityType: 'MediaRequest', entityId: mediaRequest.id },
-        }).catch(() => {});
         sendEmail({
           to: mediaManager.email,
           subject: `[IMS] 🎬 New sermon to record: ${data.title}`,
@@ -159,9 +163,6 @@ router.post('/sermons', evangOnly, async (req: Request, res: Response, next: Nex
         select: { id: true, email: true, name: true },
       });
       if (evangelismManager && evangelismManager.id !== req.user!.id) {
-        await prisma.notification.create({
-          data: { userId: evangelismManager.id, type: 'WORKFLOW_ALERT', title: 'New sermon scheduled', body: `${requester?.name} scheduled "${data.title}" for ${data.scheduledDate.split('T')[0]}`, entityType: 'Sermon', entityId: sermon.id },
-        }).catch(() => {});
         sendEmail({
           to: evangelismManager.email,
           subject: `[IMS] 📖 New sermon scheduled: ${data.title}`,
@@ -231,6 +232,11 @@ router.patch('/sermons/:id', evangOnly, async (req: Request, res: Response, next
         _count: { select: { recordings: true, mediaRequests: true } },
       },
     });
+    await notifyAllActiveUsers({
+      title: 'Sermon updated',
+      body: `"${sermon.title}" was updated in the shared Sermons list.`,
+      entityId: sermon.id,
+    }).catch(() => {});
     res.json(mapToSermon(sermon));
   } catch (err) { next(err); }
 });
@@ -238,7 +244,15 @@ router.patch('/sermons/:id', evangOnly, async (req: Request, res: Response, next
 // DELETE /api/v1/evangelism/sermons/:id
 router.delete('/sermons/:id', evangOnly, async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const sermon = await prisma.event.findUnique({ where: { id: req.params.id }, select: { id: true, title: true } });
     await prisma.event.delete({ where: { id: req.params.id } });
+    if (sermon) {
+      await notifyAllActiveUsers({
+        title: 'Sermon removed',
+        body: `"${sermon.title}" was removed from the shared Sermons list.`,
+        entityId: sermon.id,
+      }).catch(() => {});
+    }
     res.status(204).send();
   } catch (err) { next(err); }
 });
