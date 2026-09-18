@@ -373,7 +373,7 @@ router.get('/recordings/stats', mediaOnly, async (_req: Request, res: Response, 
   } catch (err) { next(err); }
 });
 
-router.get('/assignable-users', mediaOnly, async (_req: Request, res: Response, next: NextFunction) => {
+router.get('/assignable-users', sermonLibraryAccess, async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const users = await prisma.user.findMany({
       where: {

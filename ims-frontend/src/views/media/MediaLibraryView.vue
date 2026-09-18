@@ -165,7 +165,10 @@
               </label>
               <label class="text-sm">
                 <span class="block text-gray-600 dark:text-gray-300 mb-1">Reviser</span>
-                <input v-model="form.reviser" class="form-input" />
+                <select v-model="form.reviser" class="form-input">
+                  <option value="">Not assigned</option>
+                  <option v-for="user in users" :key="user.id" :value="user.name">{{ user.name }}</option>
+                </select>
               </label>
               <label class="flex items-end gap-2 text-sm text-gray-700 dark:text-gray-200">
                 <input v-model="form.rendered" type="checkbox" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
@@ -392,8 +395,8 @@ async function fetchSermons() {
 
 async function fetchUsers() {
   try {
-    const { data } = await api.get('/users', { params: { limit: 200 } });
-    users.value = Array.isArray(data) ? data : data.users || [];
+    const { data } = await api.get('/media/assignable-users');
+    users.value = Array.isArray(data) ? data : [];
   } catch {
     users.value = [];
   }
