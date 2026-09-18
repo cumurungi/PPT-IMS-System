@@ -75,7 +75,7 @@
 
         <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg px-3 py-2 text-xs text-blue-700 dark:text-blue-300 flex items-start gap-2">
           <span class="mt-0.5">📬</span>
-          <span>A recording request will be automatically sent to the Media team.</span>
+          <span>This creates the sermon once and automatically sends one recording request to Media. Media will accept it and assign the cameraman; do not create the sermon again in the Sermons list.</span>
         </div>
 
         <p v-if="error" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>

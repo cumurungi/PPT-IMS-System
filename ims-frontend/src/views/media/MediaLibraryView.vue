@@ -4,15 +4,9 @@
       <div>
         <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Sermon List</h1>
         <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-          Shared sermon production list for Evangelism and IT
+          One shared production record: Evangelism creates it, Media records and edits it, IT publishes it.
         </p>
       </div>
-      <button
-        class="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-        @click="openCreate"
-      >
-        Add Sermon
-      </button>
     </div>
 
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4 flex-shrink-0">
